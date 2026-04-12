@@ -1,22 +1,12 @@
 name = "oshicardapi"
 main = "src/index.ts"
 compatibility_date = "2025-04-01"
+routes = [{ pattern = "api.oshi.cards", custom_domain = true }]
 
 [limits]
 cpu_ms = 30000
-
-# Production (default) — api.oshi.cards
-routes = [{ pattern = "api.oshi.cards", custom_domain = true }]
 
 [[d1_databases]]
 binding = "DB"
 database_name = "oshicard-db-prod"
 database_id = "86594e06-89d8-4b10-8a97-13053104a3c4"
-
-# Dev — oshicardapi.luisrvervaet.workers.dev
-[env.dev]
-
-[[env.dev.d1_databases]]
-binding = "DB"
-database_name = "oshicard-db"
-database_id = "cffd06e0-0a83-466e-bc21-5a3c166e7dca"
