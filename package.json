@@ -4,10 +4,12 @@
   "description": "GraphQL API for the hololive Official Card Game",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --env dev",
     "deploy": "wrangler deploy",
+    "deploy:dev": "wrangler deploy --env dev",
     "db:init": "wrangler d1 execute oshicard-db --file=./schema.sql --local",
-    "db:init:remote": "wrangler d1 execute oshicard-db --file=./schema.sql --remote"
+    "db:init:remote": "wrangler d1 execute oshicard-db --file=./schema.sql --remote --env dev",
+    "db:init:prod": "wrangler d1 execute oshicard-db-prod --file=./schema.sql --remote"
   },
   "repository": {
     "type": "git",
