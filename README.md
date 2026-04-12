@@ -6,9 +6,11 @@ Data is automatically scraped from the [official English card list](https://en.h
 
 ## Live API
 
-> **GraphQL Endpoint**: `https://oshicardapi.luisrvervaet.workers.dev/graphql`
+> **GraphQL Endpoint**: `https://api.oshi.cards/graphql`
 >
 > **GraphiQL Playground**: Visit the endpoint in your browser to explore the API interactively.
+>
+> **Dev Endpoint**: `https://api.oshi.cards/graphql`
 
 ---
 
@@ -42,12 +44,12 @@ Query the API with any GraphQL client, `curl`, or the built-in GraphiQL playgrou
 
 ```bash
 # Get all cards
-curl -X POST https://oshicardapi.luisrvervaet.workers.dev/graphql \
+curl -X POST https://api.oshi.cards/graphql \
   -H 'Content-Type: application/json' \
   -d '{"query":"{ cards { totalCount nodes { name cardType color rarity } } }"}'
 
 # Get a specific card by number
-curl -X POST https://oshicardapi.luisrvervaet.workers.dev/graphql \
+curl -X POST https://api.oshi.cards/graphql \
   -H 'Content-Type: application/json' \
   -d '{"query":"{ card(cardNumber: \"hBP01-020\") { name hp arts { name damage cost } tags } }"}'
 ```

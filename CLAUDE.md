@@ -4,23 +4,32 @@
 
 GraphQL API for the hololive Official Card Game (hOCG). Scrapes card data from the official English website and serves it via a public GraphQL endpoint. Hosted on Cloudflare Workers with D1 (SQLite).
 
+## Environments
+
+| Environment | URL | D1 Database | Deploy Method |
+|-------------|-----|-------------|---------------|
+| **Production** | `https://api.oshi.cards` | `oshicard-db-prod` | Auto-deploy on merge to `main` via GitHub Actions |
+| **Dev** | `https://oshicardapi.luisrvervaet.workers.dev` | `oshicard-db` | `npx wrangler deploy` (local) |
+
 ## Tech Stack
 
 - **Runtime**: Cloudflare Workers (TypeScript)
 - **Database**: Cloudflare D1 (SQLite)
 - **GraphQL**: graphql-yoga
 - **HTML Parsing**: cheerio
-- **Build/Deploy**: Wrangler CLI
-- **Automated Scraping**: GitHub Actions (daily cron)
+- **Build/Deploy**: Wrangler CLI + GitHub Actions
+- **Automated Scraping**: GitHub Actions (daily cron for prod, manual for dev)
 
 ## Project Structure
 
 ```
-wrangler.toml              # Workers config, D1 binding
+wrangler.toml              # Workers config, D1 bindings (dev + prod environments)
 schema.sql                 # D1 database schema (run with wrangler d1 execute)
-scrape-all.sh              # Local scrape script (calls API endpoints)
+scrape-all.sh              # Local scrape script (--prod flag for production)
 .github/workflows/
-  scrape.yml               # GitHub Actions daily cron — scrapes all cards
+  deploy.yml               # Auto-deploy to prod on push to main
+  scrape-prod.yml          # Daily cron (3 AM UTC) — scrapes prod DB
+  scrape-dev.yml           # Manual trigger only — scrapes dev DB
 src/
   index.ts                 # Worker entry: GraphQL + scrape endpoints
   types.ts                 # Shared TypeScript types (DB rows, parsed cards, env)
@@ -33,18 +42,21 @@ src/
     index.ts               # Scrape helpers (getPageIds, scrapePage)
     parseList.ts           # Extracts card IDs from search result HTML
     parseDetail.ts         # Parses card detail pages into structured data
-    client.ts              # HTTP fetch with 500ms delay + retry
+    client.ts              # HTTP fetch with 200ms delay + retry
 ```
 
 ## Key Commands
 
 ```bash
 npm run dev              # Start local dev server (wrangler dev)
-npm run deploy           # Deploy to Cloudflare Workers
+npm run deploy           # Deploy to dev (oshicardapi.luisrvervaet.workers.dev)
 npm run db:init          # Apply schema.sql to local D1
-npm run db:init:remote   # Apply schema.sql to remote D1
-./scrape-all.sh          # Manually trigger a full scrape via API endpoints
+npm run db:init:remote   # Apply schema.sql to remote dev D1
+./scrape-all.sh          # Scrape dev environment
+./scrape-all.sh --prod   # Scrape production environment
 ```
+
+Production deploys happen automatically via GitHub Actions on push to `main`. Use `npx wrangler deploy --env production` for manual prod deploys.
 
 ## Data Model
 
@@ -54,18 +66,26 @@ Colors are stored as uppercase enums: `RED`, `GREEN`, `BLUE`, `WHITE`, `PURPLE`,
 
 Art costs and baton pass are stored as JSON arrays of color strings (e.g., `["RED", "COLORLESS", "COLORLESS"]`). `COLORLESS` represents the colorless/neutral cost icon.
 
-Related tables: `card_arts` (holomem moves), `card_oshi_skills` (oshi/sp skills), `card_tags` (hashtags like #EN, #Gen 1).
+Unique constraint is on `id` (INTEGER PRIMARY KEY) — the official site's card ID.
 
-Unique constraint is `(card_number, rarity)` — same card number can exist at different rarities.
+Related tables:
+- `card_arts` — holomem moves/attacks
+- `card_oshi_skills` — oshi and SP oshi skills
+- `card_tags` — hashtags like #EN, #Gen 1
+- `card_sets` — set names (cards can belong to multiple sets)
+- `card_qna` — Q&A pairs from card detail pages
+
+All text fields are sanitized to replace Unicode non-breaking spaces (U+00A0) with regular spaces.
 
 ## Scraper
 
 - Source: `https://en.hololive-official-cardgame.com/cardlist/`
 - Phase 1: `/scrape-page-ids?page=N` paginates search results to collect card IDs
 - Phase 2: `/scrape-one?id=N` fetches and parses each card detail page with cheerio
-- GitHub Actions runs daily at 3 AM UTC, calling these endpoints sequentially
-- 500ms delay between card fetches, 5s delay between pages (avoids source rate limiting)
-- Card detail HTML uses `.cardlist-Detail` container, `h1.name` for card name, `dl > dt/dd` for fields, `.oshi.skill` / `.sp.skill` for oshi skills, `div[class*='arts']` for arts, `div.extra` for extra text
+- GitHub Actions scrape-prod runs daily at 3 AM UTC
+- GitHub Actions scrape-dev is manual trigger only
+- 200ms delay between card fetches, 1s delay between pages
+- Card detail HTML uses `.cardlist-Detail` container, `h1.name` for card name, `dl > dt/dd` for fields, `.oshi.skill` / `.sp.skill` for oshi skills, `div[class*='arts']` for arts, `div.extra` for extra text, `.cardlist-Detail_QA .qa-List_Item` for Q&A
 
 ## API Endpoints
 
@@ -78,7 +98,20 @@ Unique constraint is `(card_number, rarity)` — same card number can exist at d
 
 ## Deployment
 
-1. `npx wrangler d1 create oshicard-db` and update `database_id` in `wrangler.toml`
-2. `npm run db:init:remote`
-3. `npm run deploy`
-4. Run `./scrape-all.sh` or trigger the GitHub Action to populate the DB
+### Dev
+```bash
+npx wrangler deploy    # Deploys to oshicardapi.luisrvervaet.workers.dev
+```
+
+### Production
+Push/merge to `main` → GitHub Actions auto-deploys to `api.oshi.cards` using `wrangler deploy --env production`.
+
+GitHub Secrets required:
+- `CLOUDFLARE_API_TOKEN` — API token with Workers Scripts Edit + D1 Edit permissions
+- `CLOUDFLARE_ACCOUNT_ID` — Cloudflare account ID
+
+### Initial Setup
+1. Create databases: `npx wrangler d1 create oshicard-db` and `npx wrangler d1 create oshicard-db-prod`
+2. Update `database_id` values in `wrangler.toml`
+3. Apply schema: `npm run db:init:remote` (dev) and `npx wrangler d1 execute oshicard-db-prod --remote --file=./schema.sql --env production` (prod)
+4. Deploy and trigger scrape workflows to populate databases
