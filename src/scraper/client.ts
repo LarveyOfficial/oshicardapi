@@ -1,4 +1,4 @@
-const DELAY_MS = 1000;
+const DELAY_MS = 100;
 const MAX_RETRIES = 3;
 
 function sleep(ms: number): Promise<void> {
@@ -25,6 +25,10 @@ export async function fetchWithDelay(url: string): Promise<string> {
         throw new Error(`Failed to fetch ${url}: ${res.status} after ${MAX_RETRIES} retries`);
       }
       continue;
+    }
+
+    if (res.status === 404) {
+      return ""; // Return empty string — caller decides how to handle
     }
 
     if (!res.ok) {

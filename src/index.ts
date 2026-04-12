@@ -1,7 +1,7 @@
 import { createYoga, createSchema } from "graphql-yoga";
 import { typeDefs } from "./schema/typeDefs";
 import { resolvers } from "./schema/resolvers";
-import { runScraperBatch } from "./scraper/index";
+import { runScrapeBatch } from "./scraper";
 import { fetchWithDelay } from "./scraper/client";
 import { parseCardDetail } from "./scraper/parseDetail";
 import { upsertCard } from "./db/queries";
@@ -37,12 +37,15 @@ export default {
       );
     }
 
-    // Manual scrape trigger (for testing)
+    // Trigger one scrape batch
     if (url.pathname === "/scrape") {
-      ctx.waitUntil(runScraperBatch(env));
-      return new Response(JSON.stringify({ status: "scrape started" }), {
-        headers: { "Content-Type": "application/json" },
-      });
+      const result = await runScrapeBatch(env);
+      const count = await env.DB.prepare("SELECT COUNT(*) as count FROM cards")
+        .first<{ count: number }>();
+      return new Response(
+        JSON.stringify({ ...result, cardCount: count?.count ?? 0 }),
+        { headers: { "Content-Type": "application/json" } }
+      );
     }
 
     // Scrape a single card by ID (for testing the parser)
@@ -75,6 +78,6 @@ export default {
   },
 
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(runScraperBatch(env));
+    ctx.waitUntil(runScrapeBatch(env));
   },
 };
