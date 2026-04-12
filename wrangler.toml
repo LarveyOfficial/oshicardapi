@@ -6,6 +6,16 @@ routes = [{ pattern = "api.oshi.cards", custom_domain = true }]
 [limits]
 cpu_ms = 30000
 
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+
 [[d1_databases]]
 binding = "DB"
 database_name = "oshicard-db-prod"
