@@ -77,6 +77,23 @@ export default {
       }
     }
 
+    // Scrape all cards from a search result page
+    if (url.pathname === "/scrape-page") {
+      const page = parseInt(url.searchParams.get("page") || "1", 10);
+      try {
+        const { scrapePage } = await import("./scraper");
+        const results = await scrapePage(env, page);
+        return new Response(JSON.stringify(results, null, 2), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: String(err) }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // Scrape status
     if (url.pathname === "/scrape-status") {
       const count = await env.DB.prepare("SELECT COUNT(*) as count FROM cards")
