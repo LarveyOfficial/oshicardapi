@@ -79,7 +79,7 @@ The `cards` query accepts a `filter` input with these fields:
 | `cardType` | `CardType` | Filter by card type: `HOLOMEM`, `OSHI`, `SUPPORT`, `CHEER`. |
 | `color` | `Color` | Filter by color: `WHITE`, `GREEN`, `RED`, `BLUE`, `PURPLE`, `YELLOW`, `NEUTRAL`. |
 | `rarity` | `String` | Filter by rarity code: `C`, `U`, `R`, `RR`, `SR`, `SSR`, `OSR`, `SEC`, `OC`, `UR`, etc. |
-| `setName` | `String` | Exact match on set name (e.g., `"Booster Pack – Blooming Radiance"`). Use the `sets` query to see all available set names. |
+| `setName` | `String` | Match cards that appear in a specific set (e.g., `"Booster Pack – Blooming Radiance"`). Use the `sets` query to see all available set names. |
 | `bloomLevel` | `String` | Filter holomem cards by bloom level: `Debut`, `1st`, `2nd`, `Spot`. |
 | `tag` | `String` | Exact match on a tag (e.g., `"#EN"`, `"#Gen 1"`, `"#Bird"`). Use the `tags` query to see all available tags. |
 | `supportType` | `SupportType` | Filter support cards by subtype: `ITEM`, `STAFF`, `MASCOT`, `FAN`, `EVENT`, `TOOL`. |
@@ -121,7 +121,7 @@ type Card {
   cardType: CardType!     # HOLOMEM, OSHI, SUPPORT, or CHEER
   color: String!          # RED, GREEN, BLUE, WHITE, PURPLE, YELLOW, or NEUTRAL
   rarity: String!         # C, U, R, RR, SR, SSR, OSR, SEC, etc.
-  setName: String         # Booster pack or starter deck name
+  setNames: [String!]!    # All sets this card appears in
   releaseDate: String     # Release date string
   illustrator: String     # Card illustrator name
   imageUrl: String        # URL to the card image on the official site
@@ -220,7 +220,7 @@ enum OshiSkillType {
       cardNumber
       cardType
       bloomLevel
-      setName
+      setNames
       isBuzz
       hp
       life
@@ -416,6 +416,8 @@ oshicardapi/
 **`card_arts`** — Holomem moves. `cost` is a JSON array of colors (e.g., `["RED","COLORLESS","COLORLESS"]`).
 
 **`card_oshi_skills`** — Oshi skills (regular + SP).
+
+**`card_sets`** — Sets a card appears in. A card can belong to multiple sets.
 
 **`card_tags`** — Card hashtags (e.g., `#EN`, `#Gen 1`).
 
