@@ -92,6 +92,13 @@ export const typeDefs = /* GraphQL */ `
     arts: [Art!]!
     """Skills for oshi cards"""
     oshiSkills: [OshiSkill!]!
+    """Q&A entries from the official site"""
+    qna: [QA!]!
+  }
+
+  type QA {
+    question: String!
+    answer: String!
   }
 
   type Art {

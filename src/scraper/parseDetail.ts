@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import type { ParsedCard, ParsedArt, ParsedOshiSkill } from "../types";
+import type { ParsedCard, ParsedArt, ParsedOshiSkill, ParsedQA } from "../types";
 
 const BASE_URL = "https://en.hololive-official-cardgame.com";
 
@@ -168,6 +168,23 @@ function extractOshiSkills($: cheerio.CheerioAPI): ParsedOshiSkill[] {
   });
 
   return skills;
+}
+
+function extractQA($: cheerio.CheerioAPI): ParsedQA[] {
+  const qna: ParsedQA[] = [];
+  $(".cardlist-Detail_QA .qa-List_Item").each((_, el) => {
+    const qText = $(el).find(".qa-List_Txt-Q").first();
+    const aText = $(el).find(".qa-List_Txt-A").first();
+    if (qText.length && aText.length) {
+      // Remove the leading "Q"/"A" span text and sanitize
+      const question = sanitize(qText.text().replace(/^Q/, "").trim());
+      const answer = sanitize(aText.text().replace(/^A/, "").trim());
+      if (question && answer) {
+        qna.push({ question, answer });
+      }
+    }
+  });
+  return qna;
 }
 
 function parseSkillText(text: string, skillType: string): ParsedOshiSkill | null {
@@ -354,6 +371,9 @@ export function parseCardDetail(
   // Oshi skills
   const oshiSkills = cardType === "oshi" ? extractOshiSkills($) : [];
 
+  // Q&A
+  const qna = extractQA($);
+
   return {
     id: listItem.id,
     cardNumber,
@@ -378,5 +398,6 @@ export function parseCardDetail(
     arts,
     oshiSkills,
     tags,
+    qna,
   };
 }

@@ -76,6 +76,7 @@ export interface ParsedCard {
   arts: ParsedArt[];
   oshiSkills: ParsedOshiSkill[];
   tags: string[];
+  qna: ParsedQA[];
 }
 
 export interface ParsedArt {
@@ -83,6 +84,11 @@ export interface ParsedArt {
   damage: number | null;
   cost: string[] | null;
   effectText: string | null;
+}
+
+export interface ParsedQA {
+  question: string;
+  answer: string;
 }
 
 export interface ParsedOshiSkill {

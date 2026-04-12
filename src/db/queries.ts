@@ -64,6 +64,16 @@ export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void
       .run();
   }
 
+  // Replace Q&A
+  await db.prepare("DELETE FROM card_qna WHERE card_id = ?").bind(card.id).run();
+  for (let i = 0; i < card.qna.length; i++) {
+    const qa = card.qna[i];
+    await db
+      .prepare("INSERT INTO card_qna (card_id, question, answer, sort_order) VALUES (?, ?, ?, ?)")
+      .bind(card.id, qa.question, qa.answer, i)
+      .run();
+  }
+
   // Replace sets
   await db.prepare("DELETE FROM card_sets WHERE card_id = ?").bind(card.id).run();
   for (const setName of card.setNames) {
@@ -198,6 +208,14 @@ export async function getTagsForCard(db: D1Database, cardId: number): Promise<st
     .bind(cardId)
     .all<{ tag: string }>();
   return result.results.map((r) => r.tag);
+}
+
+export async function getQnaForCard(db: D1Database, cardId: number): Promise<{ question: string; answer: string }[]> {
+  const result = await db
+    .prepare("SELECT question, answer FROM card_qna WHERE card_id = ? ORDER BY sort_order")
+    .bind(cardId)
+    .all<{ question: string; answer: string }>();
+  return result.results;
 }
 
 export async function getSetsForCard(db: D1Database, cardId: number): Promise<string[]> {
