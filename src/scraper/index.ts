@@ -1,110 +1,119 @@
-import type { Env, CardListItem, ParsedCard } from "../types";
+import type { Env, CardListItem } from "../types";
 import { fetchWithDelay } from "./client";
 import { parseCardList } from "./parseList";
 import { parseCardDetail } from "./parseDetail";
 import { upsertCard } from "../db/queries";
 
 const BASE = "https://en.hololive-official-cardgame.com";
-const BATCH_SIZE = 50;
 
-async function getState(db: D1Database, key: string): Promise<string | null> {
-  const row = await db
-    .prepare("SELECT value FROM scrape_state WHERE key = ?")
-    .bind(key)
-    .first<{ value: string }>();
-  return row?.value ?? null;
+// Queue message types
+export type ScrapeMessage =
+  | { type: "pages"; startPage: number; endPage: number }
+  | { type: "card"; id: number; name: string; imageUrl: string };
+
+/**
+ * Enqueue page numbers for collection.
+ * Each page message will be processed by the queue consumer,
+ * which fetches the page, extracts card IDs, and enqueues card messages.
+ */
+export async function enqueuePages(env: Env): Promise<number> {
+  // Send 10 page-range messages, each covering 10 pages
+  // Total: only 10 queue operations instead of 100
+  const batch: { body: ScrapeMessage }[] = [];
+  for (let i = 0; i < 100; i += 10) {
+    batch.push({ body: { type: "pages", startPage: i, endPage: i + 9 } });
+  }
+  await env.SCRAPE_QUEUE.sendBatch(batch);
+  console.log(`Enqueued 10 page-range messages (pages 0-99)`);
+  return 10;
 }
 
-async function setState(db: D1Database, key: string, value: string): Promise<void> {
-  await db
-    .prepare("INSERT OR REPLACE INTO scrape_state (key, value) VALUES (?, ?)")
-    .bind(key, value)
-    .run();
-}
+/**
+ * Process a batch of queue messages.
+ * Handles two message types:
+ *   - "page": fetches a search result page, extracts card IDs, enqueues card messages
+ *   - "card": fetches card detail, parses, upserts into DB
+ */
+export async function processQueue(
+  batch: MessageBatch<ScrapeMessage>,
+  env: Env
+): Promise<void> {
+  for (const msg of batch.messages) {
+    const data = msg.body;
 
-async function collectAllCardIds(db: D1Database): Promise<void> {
-  const existing = await getState(db, "card_ids");
-  if (existing) return; // Already collected
+    if (data.type === "pages") {
+      try {
+        const allCards: CardListItem[] = [];
 
-  console.log("Collecting all card IDs...");
-  const allCards: CardListItem[] = [];
+        for (let page = data.startPage; page <= data.endPage; page++) {
+          const url =
+            page === 0
+              ? `${BASE}/cardlist/cardsearch/`
+              : `${BASE}/cardlist/cardsearch_ex?view=image&page=${page}`;
 
-  // Fetch initial search page
-  const page1Html = await fetchWithDelay(`${BASE}/cardlist/cardsearch/`);
-  allCards.push(...parseCardList(page1Html));
-  console.log(`Page 1: found ${allCards.length} cards`);
+          const html = await fetchPage(url);
+          if (!html) break; // Past the last page
+          const cards = parseCardList(html);
+          if (cards.length === 0) break;
+          allCards.push(...cards);
+        }
 
-  // Fetch remaining pages
-  for (let page = 1; page <= 200; page++) {
-    const html = await fetchWithDelay(`${BASE}/cardlist/cardsearch_ex?view=image&page=${page}`);
-    const cards = parseCardList(html);
-    if (cards.length === 0) {
-      console.log(`Page ${page + 1}: empty, stopping`);
-      break;
+        if (allCards.length > 0) {
+          // Enqueue cards in batches of 25
+          const cardMessages = allCards.map((card) => ({
+            body: {
+              type: "card" as const,
+              id: card.id,
+              name: card.name,
+              imageUrl: card.imageUrl,
+            },
+          }));
+
+          for (let i = 0; i < cardMessages.length; i += 25) {
+            await env.SCRAPE_QUEUE.sendBatch(cardMessages.slice(i, i + 25));
+          }
+          console.log(
+            `Pages ${data.startPage}-${data.endPage}: enqueued ${allCards.length} cards`
+          );
+        }
+
+        msg.ack();
+      } catch (err) {
+        console.error(`Pages ${data.startPage}-${data.endPage} failed:`, err);
+        msg.retry();
+      }
+    } else if (data.type === "card") {
+      try {
+        const html = await fetchWithDelay(`${BASE}/cardlist/?id=${data.id}`);
+        if (!html) {
+          console.error(`Card ${data.id}: empty response`);
+          msg.ack();
+          continue;
+        }
+        const parsed = parseCardDetail(html, {
+          id: data.id,
+          name: data.name,
+          imageUrl: data.imageUrl,
+        });
+        await upsertCard(env.DB, parsed);
+        msg.ack();
+      } catch (err) {
+        console.error(`Card ${data.id} (${data.name}) failed:`, err);
+        msg.retry();
+      }
     }
-    allCards.push(...cards);
-    console.log(`Page ${page + 1}: total ${allCards.length} cards`);
   }
-
-  // Deduplicate by ID
-  const unique = new Map<number, CardListItem>();
-  for (const card of allCards) {
-    unique.set(card.id, card);
-  }
-
-  const cardIds = Array.from(unique.values());
-  await setState(db, "card_ids", JSON.stringify(cardIds));
-  await setState(db, "scrape_index", "0");
-  console.log(`Collected ${cardIds.length} unique card IDs`);
 }
 
-async function scrapeCardBatch(db: D1Database): Promise<{ done: boolean; processed: number }> {
-  const idsJson = await getState(db, "card_ids");
-  if (!idsJson) {
-    return { done: true, processed: 0 };
-  }
-
-  const allCards: CardListItem[] = JSON.parse(idsJson);
-  const indexStr = await getState(db, "scrape_index");
-  const startIndex = indexStr ? parseInt(indexStr, 10) : 0;
-
-  if (startIndex >= allCards.length) {
-    // All done — clean up state for next cycle
-    await db.prepare("DELETE FROM scrape_state WHERE key IN ('card_ids', 'scrape_index')").run();
-    console.log("Scrape complete! All cards processed.");
-    return { done: true, processed: 0 };
-  }
-
-  const endIndex = Math.min(startIndex + BATCH_SIZE, allCards.length);
-  const batch = allCards.slice(startIndex, endIndex);
-  console.log(`Processing cards ${startIndex + 1}-${endIndex} of ${allCards.length}`);
-
-  let processed = 0;
-  for (const item of batch) {
-    try {
-      const html = await fetchWithDelay(`${BASE}/cardlist/?id=${item.id}`);
-      const parsed = parseCardDetail(html, item);
-      await upsertCard(db, parsed);
-      processed++;
-      console.log(`  Scraped: ${parsed.name} (${parsed.cardNumber})`);
-    } catch (err) {
-      console.error(`  Failed to scrape card ${item.id} (${item.name}):`, err);
-    }
-  }
-
-  await setState(db, "scrape_index", String(endIndex));
-  return { done: endIndex >= allCards.length, processed };
-}
-
-export async function runScraperBatch(env: Env): Promise<void> {
-  try {
-    // Phase 1: Collect card IDs if not yet done
-    await collectAllCardIds(env.DB);
-
-    // Phase 2: Scrape a batch of cards
-    const result = await scrapeCardBatch(env.DB);
-    console.log(`Batch complete: ${result.processed} cards processed, done: ${result.done}`);
-  } catch (err) {
-    console.error("Scraper error:", err);
-  }
+/** Lightweight fetch for list pages — no delay */
+async function fetchPage(url: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "OshiCardAPI/1.0 (card-database-bot)",
+      Accept: "text/html,application/xhtml+xml",
+    },
+  });
+  if (res.status === 404) return "";
+  if (!res.ok) return "";
+  return res.text();
 }

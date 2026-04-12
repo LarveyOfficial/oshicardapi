@@ -1,7 +1,7 @@
 import { createYoga, createSchema } from "graphql-yoga";
 import { typeDefs } from "./schema/typeDefs";
 import { resolvers } from "./schema/resolvers";
-import { runScraperBatch } from "./scraper/index";
+import { enqueuePages, processQueue, type ScrapeMessage } from "./scraper";
 import { fetchWithDelay } from "./scraper/client";
 import { parseCardDetail } from "./scraper/parseDetail";
 import { upsertCard } from "./db/queries";
@@ -31,21 +31,33 @@ export default {
           cardCount: count?.count ?? 0,
           graphql: "/graphql",
         }),
-        {
-          headers: { "Content-Type": "application/json" },
-        }
+        { headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // Manual scrape trigger (for testing)
-    if (url.pathname === "/scrape") {
-      ctx.waitUntil(runScraperBatch(env));
-      return new Response(JSON.stringify({ status: "scrape started" }), {
-        headers: { "Content-Type": "application/json" },
-      });
+    // Trigger a full scrape — enqueues page numbers for the queue to process
+    if (url.pathname === "/scrape-full") {
+      try {
+        const enqueued = await enqueuePages(env);
+        const count = await env.DB.prepare("SELECT COUNT(*) as count FROM cards")
+          .first<{ count: number }>();
+        return new Response(
+          JSON.stringify({
+            status: "scrape started — pages enqueued, queue processing cards",
+            pagesEnqueued: enqueued,
+            cardCount: count?.count ?? 0,
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ error: String(err), stack: (err as Error).stack }),
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
+      }
     }
 
-    // Scrape a single card by ID (for testing the parser)
+    // Scrape a single card by ID (parser debugging)
     if (url.pathname === "/scrape-one") {
       const cardId = parseInt(url.searchParams.get("id") || "1", 10);
       try {
@@ -65,6 +77,16 @@ export default {
       }
     }
 
+    // Scrape status
+    if (url.pathname === "/scrape-status") {
+      const count = await env.DB.prepare("SELECT COUNT(*) as count FROM cards")
+        .first<{ count: number }>();
+      return new Response(
+        JSON.stringify({ cardCount: count?.count ?? 0 }),
+        { headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     // GraphQL endpoint
     if (url.pathname === "/graphql") {
       const response = await yoga.fetch(request, { env });
@@ -74,7 +96,13 @@ export default {
     return new Response("Not Found", { status: 404 });
   },
 
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(runScraperBatch(env));
+  // Queue consumer — processes page and card messages
+  async queue(batch: MessageBatch<ScrapeMessage>, env: Env): Promise<void> {
+    await processQueue(batch, env);
+  },
+
+  // Daily cron — kicks off a full scrape by enqueuing all pages
+  async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
+    await enqueuePages(env);
   },
 };
