@@ -1,7 +1,12 @@
 name: "Scrape: Dev"
 
 on:
-  workflow_dispatch: # Manual trigger only
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Preview deployment URL (e.g. https://branch-name.oshicardapi.workers.dev)"
+        required: true
+        type: string
 
 jobs:
   scrape:
@@ -9,12 +14,12 @@ jobs:
     steps:
       - name: Scrape all cards
         env:
-          BASE_URL: https://oshicardapi.luisrvervaet.workers.dev
+          BASE_URL: ${{ inputs.base_url }}
         run: |
           PAGE=1
           TOTAL=0
 
-          echo "Starting dev scrape..."
+          echo "Starting dev scrape against $BASE_URL..."
 
           while true; do
             IDS=$(curl -sf "$BASE_URL/scrape-page-ids?page=$PAGE")

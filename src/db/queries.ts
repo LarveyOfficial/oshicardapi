@@ -108,11 +108,18 @@ export async function getCardByNumber(db: D1Database, cardNumber: string): Promi
   return db.prepare("SELECT * FROM cards WHERE card_number = ?").bind(cardNumber).first<CardRow>();
 }
 
+export interface CardSort {
+  field: string;  // DB column name (e.g. "c.name", "c.card_number")
+  order: "ASC" | "DESC";
+}
+
 export async function searchCards(
   db: D1Database,
   filter: CardFilter,
   page: number,
-  pageSize: number
+  pageSize: number,
+  sort?: CardSort,
+  fetchAll?: boolean
 ): Promise<{ cards: CardRow[]; totalCount: number }> {
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -166,19 +173,30 @@ export async function searchCards(
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const offset = (page - 1) * pageSize;
+  const orderBy = sort ? `${sort.field} ${sort.order}` : "c.card_number ASC";
 
   const countResult = await db
     .prepare(`SELECT COUNT(DISTINCT c.id) as count FROM cards c ${joinTag} ${where}`)
     .bind(...params)
     .first<{ count: number }>();
 
-  const cards = await db
-    .prepare(
-      `SELECT DISTINCT c.* FROM cards c ${joinTag} ${where} ORDER BY c.card_number ASC LIMIT ? OFFSET ?`
-    )
-    .bind(...params, pageSize, offset)
-    .all<CardRow>();
+  let cards;
+  if (fetchAll) {
+    cards = await db
+      .prepare(
+        `SELECT DISTINCT c.* FROM cards c ${joinTag} ${where} ORDER BY ${orderBy}`
+      )
+      .bind(...params)
+      .all<CardRow>();
+  } else {
+    const offset = (page - 1) * pageSize;
+    cards = await db
+      .prepare(
+        `SELECT DISTINCT c.* FROM cards c ${joinTag} ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`
+      )
+      .bind(...params, pageSize, offset)
+      .all<CardRow>();
+  }
 
   return {
     cards: cards.results,

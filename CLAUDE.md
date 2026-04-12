@@ -6,10 +6,14 @@ GraphQL API for the hololive Official Card Game (hOCG). Scrapes card data from t
 
 ## Environments
 
-| Environment | URL | D1 Database | Deploy Method |
-|-------------|-----|-------------|---------------|
-| **Production** | `https://api.oshi.cards` | `oshicard-db-prod` | Auto-deploy on merge to `main` via GitHub Actions |
-| **Dev** | `https://oshicardapi.luisrvervaet.workers.dev` | `oshicard-db` | `npx wrangler deploy` (local) |
+Single Cloudflare Worker application with two deployment environments managed by Cloudflare's Git integration:
+
+| Environment | URL | D1 Database | Trigger |
+|-------------|-----|-------------|---------|
+| **Production** | `https://api.oshi.cards` | `oshicard-db-prod` | Push to `main` |
+| **Preview** | Auto-generated preview URL | `oshicard-db` (override in CF dashboard) | Push to any other branch / PR |
+
+Preview D1 binding is configured in the Cloudflare dashboard under Worker Settings → Bindings → Preview environment.
 
 ## Tech Stack
 
@@ -17,19 +21,18 @@ GraphQL API for the hololive Official Card Game (hOCG). Scrapes card data from t
 - **Database**: Cloudflare D1 (SQLite)
 - **GraphQL**: graphql-yoga
 - **HTML Parsing**: cheerio
-- **Build/Deploy**: Wrangler CLI + GitHub Actions
-- **Automated Scraping**: GitHub Actions (daily cron for prod, manual for dev)
+- **Build/Deploy**: Cloudflare Git integration (auto-builds on push)
+- **Automated Scraping**: GitHub Actions (daily cron)
 
 ## Project Structure
 
 ```
-wrangler.toml              # Workers config, D1 bindings (dev + prod environments)
+wrangler.toml              # Workers config, D1 binding, custom domain
 schema.sql                 # D1 database schema (run with wrangler d1 execute)
-scrape-all.sh              # Local scrape script (--prod flag for production)
+scrape-all.sh              # Local scrape script (--dev flag for dev)
 .github/workflows/
-  deploy.yml               # Auto-deploy to prod on push to main
   scrape-prod.yml          # Daily cron (3 AM UTC) — scrapes prod DB
-  scrape-dev.yml           # Manual trigger only — scrapes dev DB
+  scrape-dev.yml           # Manual trigger only — scrapes preview DB
 src/
   index.ts                 # Worker entry: GraphQL + scrape endpoints
   types.ts                 # Shared TypeScript types (DB rows, parsed cards, env)
@@ -49,14 +52,14 @@ src/
 
 ```bash
 npm run dev              # Start local dev server (wrangler dev)
-npm run deploy           # Deploy to dev (oshicardapi.luisrvervaet.workers.dev)
+npm run deploy           # Manual deploy to production
 npm run db:init          # Apply schema.sql to local D1
-npm run db:init:remote   # Apply schema.sql to remote dev D1
-./scrape-all.sh          # Scrape dev environment
-./scrape-all.sh --prod   # Scrape production environment
+npm run db:init:remote   # Apply schema.sql to remote prod D1
+./scrape-all.sh          # Scrape production environment
+./scrape-all.sh --dev    # Scrape dev/preview environment
 ```
 
-Production deploys happen automatically via GitHub Actions on push to `main`. Use `npx wrangler deploy --env production` for manual prod deploys.
+Production deploys happen automatically via Cloudflare Git integration on push to `main`.
 
 ## Data Model
 
@@ -98,20 +101,12 @@ All text fields are sanitized to replace Unicode non-breaking spaces (U+00A0) wi
 
 ## Deployment
 
-### Dev
-```bash
-npx wrangler deploy    # Deploys to oshicardapi.luisrvervaet.workers.dev
-```
-
-### Production
-Push/merge to `main` → GitHub Actions auto-deploys to `api.oshi.cards` using `wrangler deploy --env production`.
-
-GitHub Secrets required:
-- `CLOUDFLARE_API_TOKEN` — API token with Workers Scripts Edit + D1 Edit permissions
-- `CLOUDFLARE_ACCOUNT_ID` — Cloudflare account ID
+Production deploys automatically on push to `main` via Cloudflare Git integration. Preview deployments are created for PRs/branches.
 
 ### Initial Setup
-1. Create databases: `npx wrangler d1 create oshicard-db` and `npx wrangler d1 create oshicard-db-prod`
-2. Update `database_id` values in `wrangler.toml`
-3. Apply schema: `npm run db:init:remote` (dev) and `npx wrangler d1 execute oshicard-db-prod --remote --file=./schema.sql --env production` (prod)
-4. Deploy and trigger scrape workflows to populate databases
+1. Create database: `npx wrangler d1 create oshicard-db-prod`
+2. Update `database_id` in `wrangler.toml`
+3. Apply schema: `npm run db:init:remote`
+4. Connect repo to Cloudflare Workers Git integration in dashboard
+5. Optionally configure a preview D1 binding (`oshicard-db`) in the dashboard for preview deployments
+6. Trigger scrape to populate the database
