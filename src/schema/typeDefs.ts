@@ -58,7 +58,10 @@ export const typeDefs = /* GraphQL */ `
     cardNumber: String!
     name: String!
     cardType: CardType!
+    """Unified color string (e.g. "RED" or "RED, BLUE" for multi-color cards)"""
     color: String!
+    """Colors this card has (most cards have one, some have multiple)"""
+    colors: [String!]!
     rarity: String!
     """Sets this card appears in"""
     setNames: [String!]!

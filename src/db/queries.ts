@@ -13,7 +13,7 @@ export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void
       card.cardNumber,
       card.name,
       card.cardType,
-      card.color,
+      card.colors.join(", ") || "NEUTRAL",
       card.rarity,
       card.setNames.length > 0 ? card.setNames[0] : null,
       card.releaseDate,
@@ -82,6 +82,15 @@ export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void
       .bind(card.id, setName)
       .run();
   }
+
+  // Replace colors
+  await db.prepare("DELETE FROM card_colors WHERE card_id = ?").bind(card.id).run();
+  for (const color of card.colors) {
+    await db
+      .prepare("INSERT INTO card_colors (card_id, color) VALUES (?, ?)")
+      .bind(card.id, color)
+      .run();
+  }
 }
 
 // --- Query operations (used by GraphQL resolvers) ---
@@ -129,7 +138,7 @@ export async function searchCards(
     params.push(filter.cardType.toLowerCase());
   }
   if (filter.color) {
-    conditions.push("c.color = ?");
+    conditions.push("EXISTS (SELECT 1 FROM card_colors cc WHERE cc.card_id = c.id AND cc.color = ?)");
     params.push(filter.color);
   }
   if (filter.rarity) {
@@ -220,6 +229,14 @@ export async function getSkillsForCard(db: D1Database, cardId: number): Promise<
   return result.results;
 }
 
+export async function getColorsForCard(db: D1Database, cardId: number): Promise<string[]> {
+  const result = await db
+    .prepare("SELECT color FROM card_colors WHERE card_id = ?")
+    .bind(cardId)
+    .all<{ color: string }>();
+  return result.results.map((r) => r.color);
+}
+
 export async function getTagsForCard(db: D1Database, cardId: number): Promise<string[]> {
   const result = await db
     .prepare("SELECT tag FROM card_tags WHERE card_id = ?")
@@ -300,6 +317,19 @@ export async function batchGetSkills(db: D1Database, cardIds: number[]): Promise
   return map;
 }
 
+export async function batchGetColors(db: D1Database, cardIds: number[]): Promise<Map<number, string[]>> {
+  const rows = await batchQuery<{ card_id: number; color: string }>(db, cardIds, (p) =>
+    `SELECT card_id, color FROM card_colors WHERE card_id IN (${p})`
+  );
+  const map = new Map<number, string[]>();
+  for (const row of rows) {
+    const existing = map.get(row.card_id) || [];
+    existing.push(row.color);
+    map.set(row.card_id, existing);
+  }
+  return map;
+}
+
 export async function batchGetTags(db: D1Database, cardIds: number[]): Promise<Map<number, string[]>> {
   const rows = await batchQuery<{ card_id: number; tag: string }>(db, cardIds, (p) =>
     `SELECT card_id, tag FROM card_tags WHERE card_id IN (${p})`
@@ -355,7 +385,7 @@ export async function getAllMembers(db: D1Database): Promise<string[]> {
 
 export async function getAllColors(db: D1Database): Promise<string[]> {
   const result = await db
-    .prepare("SELECT DISTINCT color FROM cards ORDER BY color")
+    .prepare("SELECT DISTINCT color FROM card_colors ORDER BY color")
     .all<{ color: string }>();
   return result.results.map((r) => r.color);
 }

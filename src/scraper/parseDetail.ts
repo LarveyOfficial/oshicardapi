@@ -39,16 +39,41 @@ function imgSrcToColor(src: string): string {
   return "COLORLESS";
 }
 
-function extractColor($: cheerio.CheerioAPI): string {
-  let color = "NEUTRAL";
+/** Extract all colors from a type_ img src (handles combined like type_blue_red.png) */
+function extractColorsFromSrc(src: string): string[] {
+  const colorMap: [string, string][] = [
+    ["white", "WHITE"],
+    ["green", "GREEN"],
+    ["red", "RED"],
+    ["blue", "BLUE"],
+    ["purple", "PURPLE"],
+    ["yellow", "YELLOW"],
+    ["null", "NEUTRAL"],
+  ];
+  // Get the filename part after "type_" (e.g. "blue_red.png" from "type_blue_red.png")
+  const match = src.match(/type_(.+?)\.png/);
+  if (!match) return ["NEUTRAL"];
+  const parts = match[1];
+  const colors: string[] = [];
+  for (const [key, value] of colorMap) {
+    if (parts.includes(key)) {
+      colors.push(value);
+    }
+  }
+  return colors.length > 0 ? colors : ["NEUTRAL"];
+}
+
+function extractColors($: cheerio.CheerioAPI): string[] {
+  const colors: string[] = [];
   $(".info img[src*='type_']").each((_, img) => {
     const src = $(img).attr("src") || "";
-    const mapped = imgSrcToColor(src);
-    // For card color, COLORLESS maps to NEUTRAL
-    color = mapped === "COLORLESS" ? "NEUTRAL" : mapped;
-    return false; // break after first
+    for (const color of extractColorsFromSrc(src)) {
+      if (!colors.includes(color)) {
+        colors.push(color);
+      }
+    }
   });
-  return color;
+  return colors.length > 0 ? colors : ["NEUTRAL"];
 }
 
 function extractTags($: cheerio.CheerioAPI): string[] {
@@ -265,8 +290,8 @@ export function parseCardDetail(
     isLimited = parts.some((p) => p.toUpperCase() === "LIMITED");
   }
 
-  // Color
-  const color = extractColor($);
+  // Colors
+  const colors = extractColors($);
 
   // Rarity
   const rarity = getDlText($, ".info", "Rarity") || "";
@@ -379,7 +404,7 @@ export function parseCardDetail(
     cardNumber,
     name,
     cardType,
-    color,
+    colors,
     rarity,
     setNames,
     releaseDate,
