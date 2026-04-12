@@ -1,0 +1,44 @@
+name: "Scrape: Dev"
+
+on:
+  workflow_dispatch: # Manual trigger only
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scrape all cards
+        env:
+          BASE_URL: https://oshicardapi.luisrvervaet.workers.dev
+        run: |
+          PAGE=1
+          TOTAL=0
+
+          echo "Starting dev scrape..."
+
+          while true; do
+            IDS=$(curl -sf "$BASE_URL/scrape-page-ids?page=$PAGE")
+            COUNT=$(echo "$IDS" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null)
+
+            if [ "$COUNT" = "0" ] || [ -z "$COUNT" ]; then
+              echo "Page $PAGE returned 0 IDs — done!"
+              break
+            fi
+
+            echo "Page $PAGE: $COUNT cards"
+
+            for ID in $(echo "$IDS" | python3 -c "import sys,json; [print(i) for i in json.load(sys.stdin)]"); do
+              curl -sf "$BASE_URL/scrape-one?id=$ID" > /dev/null
+              sleep 0.2
+            done
+
+            TOTAL=$((TOTAL + COUNT))
+            PAGE=$((PAGE + 1))
+
+            echo "  Saved $COUNT cards (total: $TOTAL)"
+            sleep 1
+          done
+
+          echo ""
+          echo "Scrape complete! Total cards saved: $TOTAL"
+          curl -sf "$BASE_URL/scrape-status"

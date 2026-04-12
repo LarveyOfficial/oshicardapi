@@ -1,6 +1,15 @@
 #!/bin/bash
 # Scrape all cards page by page using scrape-page-ids + scrape-one
-BASE="https://oshicardapi.luisrvervaet.workers.dev"
+# Usage: ./scrape-all.sh [--prod]
+
+if [ "$1" = "--prod" ]; then
+  BASE="https://api.oshi.cards"
+  echo "Targeting PRODUCTION: $BASE"
+else
+  BASE="https://oshicardapi.luisrvervaet.workers.dev"
+  echo "Targeting DEV: $BASE"
+fi
+
 PAGE=1
 TOTAL=0
 

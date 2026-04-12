@@ -1,4 +1,4 @@
-name: Daily Card Scrape
+name: "Scrape: Production"
 
 on:
   schedule:
@@ -11,12 +11,12 @@ jobs:
     steps:
       - name: Scrape all cards
         env:
-          BASE_URL: https://oshicardapi.luisrvervaet.workers.dev
+          BASE_URL: https://api.oshi.cards
         run: |
           PAGE=1
           TOTAL=0
 
-          echo "Starting scrape..."
+          echo "Starting production scrape..."
 
           while true; do
             IDS=$(curl -sf "$BASE_URL/scrape-page-ids?page=$PAGE")
