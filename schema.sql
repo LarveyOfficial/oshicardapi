@@ -52,6 +52,13 @@ CREATE TABLE IF NOT EXISTS card_tags (
   UNIQUE(card_id, tag)
 );
 
+CREATE TABLE IF NOT EXISTS card_sets (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  card_id  INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  set_name TEXT NOT NULL,
+  UNIQUE(card_id, set_name)
+);
+
 CREATE TABLE IF NOT EXISTS scrape_state (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -65,3 +72,5 @@ CREATE INDEX IF NOT EXISTS idx_cards_bloom_level ON cards(bloom_level);
 CREATE INDEX IF NOT EXISTS idx_card_tags_tag ON card_tags(tag);
 CREATE INDEX IF NOT EXISTS idx_card_arts_card_id ON card_arts(card_id);
 CREATE INDEX IF NOT EXISTS idx_card_oshi_skills_card_id ON card_oshi_skills(card_id);
+CREATE INDEX IF NOT EXISTS idx_card_sets_card_id ON card_sets(card_id);
+CREATE INDEX IF NOT EXISTS idx_card_sets_set_name ON card_sets(set_name);

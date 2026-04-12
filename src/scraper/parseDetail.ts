@@ -3,6 +3,11 @@ import type { ParsedCard, ParsedArt, ParsedOshiSkill } from "../types";
 
 const BASE_URL = "https://en.hololive-official-cardgame.com";
 
+/** Replace non-breaking spaces and other Unicode whitespace with regular spaces */
+function sanitize(text: string): string {
+  return text.replace(/[\u00A0\u2000-\u200B\u202F\u205F\u3000\uFEFF]/g, " ").trim();
+}
+
 function getDlValue($: cheerio.CheerioAPI, container: string, label: string): ReturnType<cheerio.CheerioAPI> | null {
   let result: ReturnType<cheerio.CheerioAPI> | null = null;
   $(`${container} dl dt`).each((_, dt) => {
@@ -18,7 +23,7 @@ function getDlValue($: cheerio.CheerioAPI, container: string, label: string): Re
 
 function getDlText($: cheerio.CheerioAPI, container: string, label: string): string | null {
   const dd = getDlValue($, container, label);
-  return dd ? dd.text().trim() || null : null;
+  return dd ? sanitize(dd.text()) || null : null;
 }
 
 /** Map an img src containing arts_ or type_ to a color enum */
@@ -49,7 +54,7 @@ function extractColor($: cheerio.CheerioAPI): string {
 function extractTags($: cheerio.CheerioAPI): string[] {
   const tags: string[] = [];
   $(".info a[href*='cardsearch?keyword=%23']").each((_, el) => {
-    const text = $(el).text().trim();
+    const text = sanitize($(el).text());
     if (text) {
       tags.push(text.startsWith("#") ? text : `#${text}`);
     }
@@ -76,7 +81,7 @@ function extractArts($: cheerio.CheerioAPI): ParsedArt[] {
 
     // Extract art name and damage from the span
     // Format: [cost icons] ArtName [space] Damage[+bonus]
-    const spanText = span.text().trim();
+    const spanText = sanitize(span.text());
 
     // The art name is the text content after cost icons, damage is at the end
     // Pattern: "Everyone Together　70+紫+50" or "Alo~na!　30"
@@ -103,7 +108,7 @@ function extractArts($: cheerio.CheerioAPI): ParsedArt[] {
     });
 
     // Effect text is the text content of the p after the span
-    const fullText = artsP.text().trim();
+    const fullText = sanitize(artsP.text());
     const spanEnd = fullText.indexOf(spanText) + spanText.length;
     const effectText = fullText.substring(spanEnd).trim() || null;
 
@@ -129,9 +134,9 @@ function extractKeywords($: cheerio.CheerioAPI): { name: string; effectText: str
 
   const dataP = paragraphs.eq(1);
   const span = dataP.find("> span").first();
-  const name = span.text().trim().replace(/^[^\w#]*/g, "").trim();
-  const fullText = dataP.text().trim();
-  const spanText = span.text().trim();
+  const name = sanitize(span.text()).replace(/^[^\w#]*/g, "").trim();
+  const fullText = sanitize(dataP.text());
+  const spanText = sanitize(span.text());
   const effectText = fullText.substring(fullText.indexOf(spanText) + spanText.length).trim();
 
   return name ? { name, effectText } : null;
@@ -144,7 +149,7 @@ function extractOshiSkills($: cheerio.CheerioAPI): ParsedOshiSkill[] {
   $(".cardlist-Detail div.oshi.skill").each((_, el) => {
     const paragraphs = $(el).find("p");
     if (paragraphs.length < 2) return;
-    const text = paragraphs.eq(1).text().trim();
+    const text = sanitize(paragraphs.eq(1).text());
     const parsed = parseSkillText(text, "oshi");
     if (parsed) skills.push(parsed);
   });
@@ -157,7 +162,7 @@ function extractOshiSkills($: cheerio.CheerioAPI): ParsedOshiSkill[] {
 
     const paragraphs = $(el).find("p");
     if (paragraphs.length < 2) return;
-    const text = paragraphs.eq(1).text().trim();
+    const text = sanitize(paragraphs.eq(1).text());
     const parsed = parseSkillText(text, "sp_oshi");
     if (parsed) skills.push(parsed);
   });
@@ -207,7 +212,7 @@ export function parseCardDetail(
   const detail = $(".cardlist-Detail");
 
   // Card name
-  const name = detail.find("h1.name").first().text().trim() || listItem.name;
+  const name = sanitize(detail.find("h1.name").first().text()) || listItem.name;
 
   // Card number
   const cardNumber = detail.find("p.number span").first().text().trim() || "";
@@ -249,11 +254,14 @@ export function parseCardDetail(
   // Rarity
   const rarity = getDlText($, ".info", "Rarity") || "";
 
-  // Set name
-  const setName = getDlText($, ".info", "Card Set");
+  // Set names — source may list multiple sets separated by newlines
+  const rawSetName = getDlText($, ".info", "Card Set");
+  const setNames: string[] = rawSetName
+    ? rawSetName.split("\n").map((s) => s.trim()).filter(Boolean)
+    : [];
 
   // Illustrator
-  const illustrator = detail.find("p.ill-name span").first().text().trim() || null;
+  const illustrator = sanitize(detail.find("p.ill-name span").first().text()) || null;
 
   // Image URL
   let imageUrl = listItem.imageUrl;
@@ -293,7 +301,7 @@ export function parseCardDetail(
   if (extraDiv.length) {
     const paragraphs = extraDiv.find("p");
     if (paragraphs.length >= 2) {
-      extraText = paragraphs.eq(1).text().trim() || null;
+      extraText = sanitize(paragraphs.eq(1).text()) || null;
     }
   }
   // Fallback: try dl/dt/dd
@@ -353,7 +361,7 @@ export function parseCardDetail(
     cardType,
     color,
     rarity,
-    setName: setName?.replace(/<br\s*\/?>/g, "").trim() || null,
+    setNames,
     releaseDate,
     illustrator,
     imageUrl,

@@ -59,7 +59,7 @@ export interface ParsedCard {
   cardType: string;
   color: string;
   rarity: string;
-  setName: string | null;
+  setNames: string[];
   releaseDate: string | null;
   illustrator: string | null;
   imageUrl: string | null;

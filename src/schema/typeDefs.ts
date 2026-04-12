@@ -60,7 +60,8 @@ export const typeDefs = /* GraphQL */ `
     cardType: CardType!
     color: String!
     rarity: String!
-    setName: String
+    """Sets this card appears in"""
+    setNames: [String!]!
     releaseDate: String
     illustrator: String
     imageUrl: String

@@ -15,7 +15,7 @@ export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void
       card.cardType,
       card.color,
       card.rarity,
-      card.setName,
+      card.setNames.length > 0 ? card.setNames[0] : null,
       card.releaseDate,
       card.illustrator,
       card.imageUrl,
@@ -61,6 +61,15 @@ export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void
     await db
       .prepare("INSERT INTO card_tags (card_id, tag) VALUES (?, ?)")
       .bind(card.id, tag)
+      .run();
+  }
+
+  // Replace sets
+  await db.prepare("DELETE FROM card_sets WHERE card_id = ?").bind(card.id).run();
+  for (const setName of card.setNames) {
+    await db
+      .prepare("INSERT INTO card_sets (card_id, set_name) VALUES (?, ?)")
+      .bind(card.id, setName)
       .run();
   }
 }
@@ -111,7 +120,7 @@ export async function searchCards(
     params.push(filter.rarity);
   }
   if (filter.setName) {
-    conditions.push("c.set_name = ?");
+    conditions.push("EXISTS (SELECT 1 FROM card_sets cs WHERE cs.card_id = c.id AND cs.set_name = ?)");
     params.push(filter.setName);
   }
   if (filter.bloomLevel) {
@@ -191,9 +200,17 @@ export async function getTagsForCard(db: D1Database, cardId: number): Promise<st
   return result.results.map((r) => r.tag);
 }
 
+export async function getSetsForCard(db: D1Database, cardId: number): Promise<string[]> {
+  const result = await db
+    .prepare("SELECT set_name FROM card_sets WHERE card_id = ? ORDER BY set_name")
+    .bind(cardId)
+    .all<{ set_name: string }>();
+  return result.results.map((r) => r.set_name);
+}
+
 export async function getAllSets(db: D1Database): Promise<string[]> {
   const result = await db
-    .prepare("SELECT DISTINCT set_name FROM cards WHERE set_name IS NOT NULL ORDER BY set_name")
+    .prepare("SELECT DISTINCT set_name FROM card_sets ORDER BY set_name")
     .all<{ set_name: string }>();
   return result.results.map((r) => r.set_name);
 }

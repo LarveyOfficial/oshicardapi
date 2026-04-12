@@ -6,6 +6,7 @@ import {
   getArtsForCard,
   getSkillsForCard,
   getTagsForCard,
+  getSetsForCard,
   getAllSets,
   getAllTags,
   getAllMembers,
@@ -57,10 +58,11 @@ function mapColor(gqlColor: string): string {
 }
 
 async function resolveCardFields(card: CardRow, db: D1Database) {
-  const [arts, oshiSkills, tags] = await Promise.all([
+  const [arts, oshiSkills, tags, setNames] = await Promise.all([
     getArtsForCard(db, card.id),
     getSkillsForCard(db, card.id),
     getTagsForCard(db, card.id),
+    getSetsForCard(db, card.id),
   ]);
 
   return {
@@ -70,7 +72,7 @@ async function resolveCardFields(card: CardRow, db: D1Database) {
     cardType: mapCardType(card.card_type),
     color: card.color,
     rarity: card.rarity,
-    setName: card.set_name,
+    setNames,
     releaseDate: card.release_date,
     illustrator: card.illustrator,
     imageUrl: card.image_url,

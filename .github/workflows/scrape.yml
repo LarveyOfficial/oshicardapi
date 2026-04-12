@@ -31,14 +31,14 @@ jobs:
 
             for ID in $(echo "$IDS" | python3 -c "import sys,json; [print(i) for i in json.load(sys.stdin)]"); do
               curl -sf "$BASE_URL/scrape-one?id=$ID" > /dev/null
-              sleep 0.5
+              sleep 0.2
             done
 
             TOTAL=$((TOTAL + COUNT))
             PAGE=$((PAGE + 1))
 
             echo "  Saved $COUNT cards (total: $TOTAL)"
-            sleep 5
+            sleep 1
           done
 
           echo ""
