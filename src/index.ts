@@ -1,11 +1,12 @@
 import { createYoga, createSchema } from "graphql-yoga";
 import { typeDefs } from "./schema/typeDefs";
 import { resolvers } from "./schema/resolvers";
-import { enqueuePages, processQueue, type ScrapeMessage } from "./scraper";
 import { fetchWithDelay } from "./scraper/client";
 import { parseCardDetail } from "./scraper/parseDetail";
 import { upsertCard } from "./db/queries";
 import type { Env } from "./types";
+
+export { ScrapeWorkflow } from "./scraper/workflow";
 
 const yoga = createYoga<{ env: Env }>({
   schema: createSchema({ typeDefs, resolvers }),
@@ -35,26 +36,48 @@ export default {
       );
     }
 
-    // Trigger a full scrape — enqueues page numbers for the queue to process
-    if (url.pathname === "/scrape-full") {
+    // Trigger a full scrape workflow
+    if (url.pathname === "/scrape") {
       try {
-        const enqueued = await enqueuePages(env);
-        const count = await env.DB.prepare("SELECT COUNT(*) as count FROM cards")
-          .first<{ count: number }>();
+        const instance = await env.SCRAPE_WORKFLOW.create();
         return new Response(
-          JSON.stringify({
-            status: "scrape started — pages enqueued, queue processing cards",
-            pagesEnqueued: enqueued,
-            cardCount: count?.count ?? 0,
-          }),
+          JSON.stringify({ status: "scrape workflow started", instanceId: instance.id }),
           { headers: { "Content-Type": "application/json" } }
         );
       } catch (err) {
         return new Response(
-          JSON.stringify({ error: String(err), stack: (err as Error).stack }),
+          JSON.stringify({ error: String(err) }),
           { status: 500, headers: { "Content-Type": "application/json" } }
         );
       }
+    }
+
+    // Check workflow instance status
+    if (url.pathname === "/scrape-status") {
+      const instanceId = url.searchParams.get("id");
+      const count = await env.DB.prepare("SELECT COUNT(*) as count FROM cards")
+        .first<{ count: number }>();
+
+      if (instanceId) {
+        try {
+          const instance = await env.SCRAPE_WORKFLOW.get(instanceId);
+          const status = await instance.status();
+          return new Response(
+            JSON.stringify({ cardCount: count?.count ?? 0, workflow: status }),
+            { headers: { "Content-Type": "application/json" } }
+          );
+        } catch (err) {
+          return new Response(
+            JSON.stringify({ cardCount: count?.count ?? 0, error: String(err) }),
+            { status: 404, headers: { "Content-Type": "application/json" } }
+          );
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ cardCount: count?.count ?? 0 }),
+        { headers: { "Content-Type": "application/json" } }
+      );
     }
 
     // Scrape a single card by ID (parser debugging)
@@ -94,16 +117,6 @@ export default {
       }
     }
 
-    // Scrape status
-    if (url.pathname === "/scrape-status") {
-      const count = await env.DB.prepare("SELECT COUNT(*) as count FROM cards")
-        .first<{ count: number }>();
-      return new Response(
-        JSON.stringify({ cardCount: count?.count ?? 0 }),
-        { headers: { "Content-Type": "application/json" } }
-      );
-    }
-
     // GraphQL endpoint
     if (url.pathname === "/graphql") {
       const response = await yoga.fetch(request, { env });
@@ -113,13 +126,9 @@ export default {
     return new Response("Not Found", { status: 404 });
   },
 
-  // Queue consumer — processes page and card messages
-  async queue(batch: MessageBatch<ScrapeMessage>, env: Env): Promise<void> {
-    await processQueue(batch, env);
-  },
-
-  // Daily cron — kicks off a full scrape by enqueuing all pages
+  // Daily cron — kicks off the scrape workflow
   async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
-    await enqueuePages(env);
+    await env.SCRAPE_WORKFLOW.create();
+    console.log("Cron: started scrape workflow");
   },
 };

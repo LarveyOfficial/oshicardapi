@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS cards (
   support_type  TEXT,
   is_limited    INTEGER NOT NULL DEFAULT 0,
   special_text  TEXT,
+  extra_text    TEXT,
   scraped_at    TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(card_number, rarity)
 );

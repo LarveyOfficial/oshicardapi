@@ -52,17 +52,8 @@ function mapSupportTypeToDb(gqlType: string): string {
 }
 
 function mapColor(gqlColor: string): string {
-  // GraphQL enums come as uppercase, DB stores capitalized
-  const map: Record<string, string> = {
-    WHITE: "White",
-    GREEN: "Green",
-    RED: "Red",
-    BLUE: "Blue",
-    PURPLE: "Purple",
-    YELLOW: "Yellow",
-    NEUTRAL: "Neutral",
-  };
-  return map[gqlColor] || gqlColor;
+  // DB now stores uppercase color values matching GraphQL enums
+  return gqlColor;
 }
 
 async function resolveCardFields(card: CardRow, db: D1Database) {
@@ -89,14 +80,15 @@ async function resolveCardFields(card: CardRow, db: D1Database) {
     supportType: card.support_type,
     isLimited: card.is_limited === 1,
     bloomLevel: card.bloom_level,
-    batonPass: card.baton_pass,
+    batonPass: card.baton_pass ? JSON.parse(card.baton_pass) : null,
     life: card.life,
     specialText: card.special_text,
+    extraText: card.extra_text ?? null,
     tags,
     arts: arts.map((a: ArtRow) => ({
       name: a.name,
       damage: a.damage,
-      cost: a.cost,
+      cost: a.cost ? JSON.parse(a.cost) : null,
       effectText: a.effect_text,
     })),
     oshiSkills: oshiSkills.map((s: OshiSkillRow) => ({

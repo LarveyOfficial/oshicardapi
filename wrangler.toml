@@ -3,20 +3,14 @@ main = "src/index.ts"
 compatibility_date = "2025-04-01"
 
 [triggers]
-crons = ["0 3 * * *"]  # Daily at 3 AM UTC — enqueues all cards for scraping
+crons = ["0 3 * * *"]  # Daily at 3 AM UTC — triggers full scrape workflow
 
 [[d1_databases]]
 binding = "DB"
 database_name = "oshicard-db"
 database_id = "cffd06e0-0a83-466e-bc21-5a3c166e7dca"
 
-[[queues.producers]]
-queue = "oshicard-scrape-queue"
-binding = "SCRAPE_QUEUE"
-
-[[queues.consumers]]
-queue = "oshicard-scrape-queue"
-max_batch_size = 5
-max_batch_timeout = 5
-max_retries = 5
-retry_delay = 30
+[[workflows]]
+name = "oshicard-scrape-workflow"
+binding = "SCRAPE_WORKFLOW"
+class_name = "ScrapeWorkflow"

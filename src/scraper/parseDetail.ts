@@ -21,27 +21,27 @@ function getDlText($: cheerio.CheerioAPI, container: string, label: string): str
   return dd ? dd.text().trim() || null : null;
 }
 
-function extractColor($: cheerio.CheerioAPI): string {
-  const colorMap: Record<string, string> = {
-    type_white: "White",
-    type_green: "Green",
-    type_red: "Red",
-    type_blue: "Blue",
-    type_purple: "Purple",
-    type_yellow: "Yellow",
-    type_null: "Neutral",
-  };
+/** Map an img src containing arts_ or type_ to a color enum */
+function imgSrcToColor(src: string): string {
+  if (src.includes("_white")) return "WHITE";
+  if (src.includes("_green")) return "GREEN";
+  if (src.includes("_red")) return "RED";
+  if (src.includes("_blue")) return "BLUE";
+  if (src.includes("_purple")) return "PURPLE";
+  if (src.includes("_yellow")) return "YELLOW";
+  // arts_null / type_null = colorless/neutral
+  if (src.includes("_null")) return "COLORLESS";
+  return "COLORLESS";
+}
 
-  // Look in info_Detail or info dl for color icon
-  let color = "Neutral";
+function extractColor($: cheerio.CheerioAPI): string {
+  let color = "NEUTRAL";
   $(".info img[src*='type_']").each((_, img) => {
     const src = $(img).attr("src") || "";
-    for (const [key, value] of Object.entries(colorMap)) {
-      if (src.includes(key)) {
-        color = value;
-        return false;
-      }
-    }
+    const mapped = imgSrcToColor(src);
+    // For card color, COLORLESS maps to NEUTRAL
+    color = mapped === "COLORLESS" ? "NEUTRAL" : mapped;
+    return false; // break after first
   });
   return color;
 }
@@ -92,20 +92,14 @@ function extractArts($: cheerio.CheerioAPI): ParsedArt[] {
       name = spanText.replace(/^[◇白緑赤青紫黄]+/, "").trim();
     }
 
-    // Extract cost from img alts within the span
+    // Extract cost from img src attributes within the span — map to color names
+    // Collect ALL icons (no dedup) to preserve costs like [RED, COLORLESS, COLORLESS]
     const costParts: string[] = [];
-    span.find("img[class!='']").each((_, img) => {
+    span.find("img[src*='arts_']").each((_, img) => {
       // Skip tokkou (bonus) images
       if ($(img).closest(".tokkou").length) return;
-      const alt = $(img).attr("alt") || "";
-      costParts.push(alt);
-    });
-    // Also get arts_ images
-    span.find("img[src*='arts_']").each((_, img) => {
-      const alt = $(img).attr("alt") || "";
-      if (!costParts.includes(alt)) {
-        costParts.push(alt);
-      }
+      const src = $(img).attr("src") || "";
+      costParts.push(imgSrcToColor(src));
     });
 
     // Effect text is the text content of the p after the span
@@ -117,7 +111,7 @@ function extractArts($: cheerio.CheerioAPI): ParsedArt[] {
       arts.push({
         name,
         damage: damage && !isNaN(damage) ? damage : null,
-        cost: costParts.length > 0 ? costParts.join(", ") : null,
+        cost: costParts.length > 0 ? costParts : null,
         effectText,
       });
     }
@@ -280,15 +274,31 @@ export function parseCardDetail(
   // Bloom level
   const bloomLevel = getDlText($, ".info", "Bloom Level");
 
-  // Baton pass - extract from icon alt texts
+  // Baton pass - extract from img src, map to color names array
   const batonPassDd = getDlValue($, ".info", "Baton Pass");
-  let batonPass: string | null = null;
+  let batonPass: string[] | null = null;
   if (batonPassDd) {
-    const icons: string[] = [];
-    batonPassDd.find("img").each((_, img) => {
-      icons.push($(img).attr("alt") || "");
+    const colors: string[] = [];
+    batonPassDd.find("img[src*='arts_']").each((_, img) => {
+      const src = $(img).attr("src") || "";
+      colors.push(imgSrcToColor(src));
     });
-    batonPass = icons.join("") || batonPassDd.text().trim() || null;
+    batonPass = colors.length > 0 ? colors : null;
+  }
+
+  // Extra text (e.g., "You may include any number of this holomem in the deck")
+  // Lives in <div class="extra"><p>Extra</p><p>text</p></div>
+  let extraText: string | null = null;
+  const extraDiv = detail.find("div.extra");
+  if (extraDiv.length) {
+    const paragraphs = extraDiv.find("p");
+    if (paragraphs.length >= 2) {
+      extraText = paragraphs.eq(1).text().trim() || null;
+    }
+  }
+  // Fallback: try dl/dt/dd
+  if (!extraText) {
+    extraText = getDlText($, ".info", "Extra") || getDlText($, ".cardlist-Detail", "Extra") || null;
   }
 
   // Special text (ability text, deck rules)
@@ -356,6 +366,7 @@ export function parseCardDetail(
     supportType,
     isLimited,
     specialText,
+    extraText,
     arts,
     oshiSkills,
     tags,

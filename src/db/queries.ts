@@ -5,8 +5,8 @@ import type { ParsedCard, CardRow, ArtRow, OshiSkillRow } from "../types";
 export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void> {
   await db
     .prepare(
-      `INSERT OR REPLACE INTO cards (id, card_number, name, card_type, color, rarity, set_name, release_date, illustrator, image_url, card_url, hp, bloom_level, baton_pass, life, is_buzz, support_type, is_limited, special_text, scraped_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+      `INSERT OR REPLACE INTO cards (id, card_number, name, card_type, color, rarity, set_name, release_date, illustrator, image_url, card_url, hp, bloom_level, baton_pass, life, is_buzz, support_type, is_limited, special_text, extra_text, scraped_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
     )
     .bind(
       card.id,
@@ -22,12 +22,13 @@ export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void
       card.cardUrl,
       card.hp,
       card.bloomLevel,
-      card.batonPass,
+      card.batonPass ? JSON.stringify(card.batonPass) : null,
       card.life,
       card.isBuzz ? 1 : 0,
       card.supportType,
       card.isLimited ? 1 : 0,
-      card.specialText
+      card.specialText,
+      card.extraText
     )
     .run();
 
@@ -39,7 +40,7 @@ export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void
       .prepare(
         "INSERT INTO card_arts (card_id, name, damage, cost, effect_text, sort_order) VALUES (?, ?, ?, ?, ?, ?)"
       )
-      .bind(card.id, art.name, art.damage, art.cost, art.effectText, i)
+      .bind(card.id, art.name, art.damage, art.cost ? JSON.stringify(art.cost) : null, art.effectText, i)
       .run();
   }
 

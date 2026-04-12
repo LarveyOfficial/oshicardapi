@@ -1,6 +1,6 @@
 export interface Env {
   DB: D1Database;
-  SCRAPE_QUEUE: Queue;
+  SCRAPE_WORKFLOW: Workflow;
 }
 
 export interface CardRow {
@@ -23,6 +23,7 @@ export interface CardRow {
   support_type: string | null;
   is_limited: number;
   special_text: string | null;
+  extra_text: string | null;
   scraped_at: string;
 }
 
@@ -66,12 +67,13 @@ export interface ParsedCard {
   cardUrl: string | null;
   hp: number | null;
   bloomLevel: string | null;
-  batonPass: string | null;
+  batonPass: string[] | null;
   life: number | null;
   isBuzz: boolean;
   supportType: string | null;
   isLimited: boolean;
   specialText: string | null;
+  extraText: string | null;
   arts: ParsedArt[];
   oshiSkills: ParsedOshiSkill[];
   tags: string[];
@@ -80,7 +82,7 @@ export interface ParsedCard {
 export interface ParsedArt {
   name: string;
   damage: number | null;
-  cost: string | null;
+  cost: string[] | null;
   effectText: string | null;
 }
 

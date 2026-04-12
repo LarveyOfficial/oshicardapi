@@ -72,8 +72,8 @@ export const typeDefs = /* GraphQL */ `
     hp: Int
     """Bloom level for holomem cards (Debut, 1st, 2nd, Spot)"""
     bloomLevel: String
-    """Baton pass info for holomem cards"""
-    batonPass: String
+    """Baton pass cost for holomem cards (array of colors)"""
+    batonPass: [String!]
     """Life for oshi cards"""
     life: Int
     """Whether this is a Buzz holomem card"""
@@ -84,6 +84,8 @@ export const typeDefs = /* GraphQL */ `
     isLimited: Boolean!
     """Additional rules/ability text"""
     specialText: String
+    """Extra text (e.g. 'You may include any number of this holomem in the deck')"""
+    extraText: String
 
     """Arts/moves for holomem cards"""
     arts: [Art!]!
@@ -94,7 +96,8 @@ export const typeDefs = /* GraphQL */ `
   type Art {
     name: String!
     damage: Int
-    cost: String
+    """Cost as array of colors (RED, GREEN, BLUE, WHITE, PURPLE, YELLOW, COLORLESS)"""
+    cost: [String!]
     effectText: String
   }
 
