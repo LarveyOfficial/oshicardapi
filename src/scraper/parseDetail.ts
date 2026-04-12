@@ -39,16 +39,18 @@ function imgSrcToColor(src: string): string {
   return "COLORLESS";
 }
 
-function extractColor($: cheerio.CheerioAPI): string {
-  let color = "NEUTRAL";
+function extractColors($: cheerio.CheerioAPI): string[] {
+  const colors: string[] = [];
   $(".info img[src*='type_']").each((_, img) => {
     const src = $(img).attr("src") || "";
     const mapped = imgSrcToColor(src);
     // For card color, COLORLESS maps to NEUTRAL
-    color = mapped === "COLORLESS" ? "NEUTRAL" : mapped;
-    return false; // break after first
+    const color = mapped === "COLORLESS" ? "NEUTRAL" : mapped;
+    if (!colors.includes(color)) {
+      colors.push(color);
+    }
   });
-  return color;
+  return colors.length > 0 ? colors : ["NEUTRAL"];
 }
 
 function extractTags($: cheerio.CheerioAPI): string[] {
@@ -265,8 +267,8 @@ export function parseCardDetail(
     isLimited = parts.some((p) => p.toUpperCase() === "LIMITED");
   }
 
-  // Color
-  const color = extractColor($);
+  // Colors
+  const colors = extractColors($);
 
   // Rarity
   const rarity = getDlText($, ".info", "Rarity") || "";
@@ -379,7 +381,7 @@ export function parseCardDetail(
     cardNumber,
     name,
     cardType,
-    color,
+    colors,
     rarity,
     setNames,
     releaseDate,

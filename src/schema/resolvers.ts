@@ -8,11 +8,13 @@ import {
   getTagsForCard,
   getQnaForCard,
   getSetsForCard,
+  getColorsForCard,
   batchGetArts,
   batchGetSkills,
   batchGetTags,
   batchGetQna,
   batchGetSets,
+  batchGetColors,
   getAllSets,
   getAllTags,
   getAllMembers,
@@ -76,12 +78,13 @@ const SORT_FIELD_MAP: Record<string, string> = {
 };
 
 async function resolveCardFields(card: CardRow, db: D1Database) {
-  const [arts, oshiSkills, tags, qna, setNames] = await Promise.all([
+  const [arts, oshiSkills, tags, qna, setNames, colors] = await Promise.all([
     getArtsForCard(db, card.id),
     getSkillsForCard(db, card.id),
     getTagsForCard(db, card.id),
     getQnaForCard(db, card.id),
     getSetsForCard(db, card.id),
+    getColorsForCard(db, card.id),
   ]);
 
   return {
@@ -89,7 +92,8 @@ async function resolveCardFields(card: CardRow, db: D1Database) {
     cardNumber: card.card_number,
     name: card.name,
     cardType: mapCardType(card.card_type),
-    color: card.color,
+    color: colors.join(", "),
+    colors,
     rarity: card.rarity,
     setNames,
     releaseDate: card.release_date,
@@ -130,13 +134,15 @@ function mapCardRow(
   tags: string[],
   qna: { question: string; answer: string }[],
   setNames: string[],
+  colors: string[],
 ) {
   return {
     id: card.id,
     cardNumber: card.card_number,
     name: card.name,
     cardType: mapCardType(card.card_type),
-    color: card.color,
+    color: colors.join(", "),
+    colors,
     rarity: card.rarity,
     setNames,
     releaseDate: card.release_date,
@@ -172,12 +178,13 @@ function mapCardRow(
 
 async function batchResolveCards(cards: CardRow[], db: D1Database) {
   const cardIds = cards.map((c) => c.id);
-  const [artsMap, skillsMap, tagsMap, qnaMap, setsMap] = await Promise.all([
+  const [artsMap, skillsMap, tagsMap, qnaMap, setsMap, colorsMap] = await Promise.all([
     batchGetArts(db, cardIds),
     batchGetSkills(db, cardIds),
     batchGetTags(db, cardIds),
     batchGetQna(db, cardIds),
     batchGetSets(db, cardIds),
+    batchGetColors(db, cardIds),
   ]);
 
   return cards.map((card) =>
@@ -188,6 +195,7 @@ async function batchResolveCards(cards: CardRow[], db: D1Database) {
       tagsMap.get(card.id) || [],
       qnaMap.get(card.id) || [],
       setsMap.get(card.id) || [],
+      colorsMap.get(card.id) || [],
     )
   );
 }
