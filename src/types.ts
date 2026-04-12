@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  SCRAPE_QUEUE: Queue;
 }
 
 export interface CardRow {
