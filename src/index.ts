@@ -6,8 +6,6 @@ import { parseCardDetail } from "./scraper/parseDetail";
 import { upsertCard } from "./db/queries";
 import type { Env } from "./types";
 
-export { ScrapeWorkflow } from "./scraper/workflow";
-
 const yoga = createYoga<{ env: Env }>({
   schema: createSchema({ typeDefs, resolvers }),
   graphiql: true,
@@ -36,51 +34,24 @@ export default {
       );
     }
 
-    // Trigger a full scrape workflow
-    if (url.pathname === "/scrape") {
+    // Get card IDs from a search result page
+    if (url.pathname === "/scrape-page-ids") {
+      const page = parseInt(url.searchParams.get("page") || "0", 10);
       try {
-        const instance = await env.SCRAPE_WORKFLOW.create();
-        return new Response(
-          JSON.stringify({ status: "scrape workflow started", instanceId: instance.id }),
-          { headers: { "Content-Type": "application/json" } }
-        );
+        const { getPageIds } = await import("./scraper");
+        const ids = await getPageIds(page);
+        return new Response(JSON.stringify(ids), {
+          headers: { "Content-Type": "application/json" },
+        });
       } catch (err) {
-        return new Response(
-          JSON.stringify({ error: String(err) }),
-          { status: 500, headers: { "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: String(err) }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
       }
     }
 
-    // Check workflow instance status
-    if (url.pathname === "/scrape-status") {
-      const instanceId = url.searchParams.get("id");
-      const count = await env.DB.prepare("SELECT COUNT(*) as count FROM cards")
-        .first<{ count: number }>();
-
-      if (instanceId) {
-        try {
-          const instance = await env.SCRAPE_WORKFLOW.get(instanceId);
-          const status = await instance.status();
-          return new Response(
-            JSON.stringify({ cardCount: count?.count ?? 0, workflow: status }),
-            { headers: { "Content-Type": "application/json" } }
-          );
-        } catch (err) {
-          return new Response(
-            JSON.stringify({ cardCount: count?.count ?? 0, error: String(err) }),
-            { status: 404, headers: { "Content-Type": "application/json" } }
-          );
-        }
-      }
-
-      return new Response(
-        JSON.stringify({ cardCount: count?.count ?? 0 }),
-        { headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    // Scrape a single card by ID (parser debugging)
+    // Scrape a single card by ID
     if (url.pathname === "/scrape-one") {
       const cardId = parseInt(url.searchParams.get("id") || "1", 10);
       try {
@@ -100,21 +71,14 @@ export default {
       }
     }
 
-    // Scrape all cards from a search result page
-    if (url.pathname === "/scrape-page") {
-      const page = parseInt(url.searchParams.get("page") || "1", 10);
-      try {
-        const { scrapePage } = await import("./scraper");
-        const results = await scrapePage(env, page);
-        return new Response(JSON.stringify(results, null, 2), {
-          headers: { "Content-Type": "application/json" },
-        });
-      } catch (err) {
-        return new Response(JSON.stringify({ error: String(err) }), {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
+    // Scrape status
+    if (url.pathname === "/scrape-status") {
+      const count = await env.DB.prepare("SELECT COUNT(*) as count FROM cards")
+        .first<{ count: number }>();
+      return new Response(
+        JSON.stringify({ cardCount: count?.count ?? 0 }),
+        { headers: { "Content-Type": "application/json" } }
+      );
     }
 
     // GraphQL endpoint
@@ -124,11 +88,5 @@ export default {
     }
 
     return new Response("Not Found", { status: 404 });
-  },
-
-  // Daily cron — kicks off the scrape workflow
-  async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
-    await env.SCRAPE_WORKFLOW.create();
-    console.log("Cron: started scrape workflow");
   },
 };

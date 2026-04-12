@@ -2,15 +2,7 @@ name = "oshicardapi"
 main = "src/index.ts"
 compatibility_date = "2025-04-01"
 
-[triggers]
-crons = ["0 3 * * *"]  # Daily at 3 AM UTC — triggers full scrape workflow
-
 [[d1_databases]]
 binding = "DB"
 database_name = "oshicard-db"
 database_id = "cffd06e0-0a83-466e-bc21-5a3c166e7dca"
-
-[[workflows]]
-name = "oshicard-scrape-workflow"
-binding = "SCRAPE_WORKFLOW"
-class_name = "ScrapeWorkflow"

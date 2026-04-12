@@ -1,6 +1,5 @@
 export interface Env {
   DB: D1Database;
-  SCRAPE_WORKFLOW: Workflow;
 }
 
 export interface CardRow {

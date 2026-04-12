@@ -7,6 +7,29 @@ import { upsertCard } from "../db/queries";
 const BASE = "https://en.hololive-official-cardgame.com";
 
 /**
+ * Get card IDs from a search result page.
+ */
+export async function getPageIds(page: number): Promise<number[]> {
+  const url =
+    page === 0
+      ? `${BASE}/cardlist/cardsearch/`
+      : `${BASE}/cardlist/cardsearch_ex?view=image&page=${page}`;
+
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "OshiCardAPI/1.0 (card-database-bot)",
+      Accept: "text/html,application/xhtml+xml",
+    },
+  });
+  if (!res.ok) return [];
+  const html = await res.text();
+  if (!html) return [];
+
+  const items = parseCardList(html);
+  return items.map((item) => item.id);
+}
+
+/**
  * Scrape all cards from a single search result page.
  * Fetches the page, extracts card IDs, scrapes each card detail,
  * saves to DB, and returns all parsed cards.
