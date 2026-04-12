@@ -9,8 +9,6 @@ Data is automatically scraped from the [official English card list](https://en.h
 > **GraphQL Endpoint**: `https://api.oshi.cards/graphql`
 >
 > **GraphiQL Playground**: Visit the endpoint in your browser to explore the API interactively.
->
-> **Dev Endpoint**: `https://api.oshi.cards/graphql`
 
 ---
 
