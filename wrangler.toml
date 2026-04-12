@@ -2,6 +2,9 @@ name = "oshicardapi"
 main = "src/index.ts"
 compatibility_date = "2025-04-01"
 
+[limits]
+cpu_ms = 30000
+
 # Dev (default) — oshicardapi.luisrvervaet.workers.dev
 [[d1_databases]]
 binding = "DB"

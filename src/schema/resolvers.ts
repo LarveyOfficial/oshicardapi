@@ -14,6 +14,7 @@ import {
   getAllColors,
   getAllRarities,
   type CardFilter,
+  type CardSort,
 } from "../db/queries";
 
 interface Context {
@@ -57,6 +58,15 @@ function mapColor(gqlColor: string): string {
   // DB now stores uppercase color values matching GraphQL enums
   return gqlColor;
 }
+
+const SORT_FIELD_MAP: Record<string, string> = {
+  NAME: "c.name",
+  CARD_NUMBER: "c.card_number",
+  HP: "c.hp",
+  RARITY: "c.rarity",
+  COLOR: "c.color",
+  CARD_TYPE: "c.card_type",
+};
 
 async function resolveCardFields(card: CardRow, db: D1Database) {
   const [arts, oshiSkills, tags, qna, setNames] = await Promise.all([
@@ -124,12 +134,19 @@ export const resolvers = {
 
     async cards(
       _: unknown,
-      args: { filter?: CardFilter & { cardType?: string; color?: string }; page?: number; pageSize?: number },
+      args: {
+        filter?: CardFilter & { cardType?: string; color?: string };
+        sort?: { field: string; order?: string };
+        page?: number;
+        pageSize?: number;
+      },
       context: Context
     ) {
       const db = context.env.DB;
       const page = args.page ?? 1;
-      const pageSize = Math.min(args.pageSize ?? 20, 500);
+      const rawPageSize = args.pageSize ?? 20;
+      const fetchAll = rawPageSize === 0;
+      const pageSize = fetchAll ? 0 : Math.min(rawPageSize, 500);
 
       const filter: CardFilter = {};
       if (args.filter) {
@@ -146,8 +163,16 @@ export const resolvers = {
         if (args.filter.includeBuzz !== undefined) filter.includeBuzz = args.filter.includeBuzz;
       }
 
-      const { cards, totalCount } = await searchCards(db, filter, page, pageSize);
-      const totalPages = Math.ceil(totalCount / pageSize);
+      let sort: CardSort | undefined;
+      if (args.sort) {
+        const dbField = SORT_FIELD_MAP[args.sort.field];
+        if (dbField) {
+          sort = { field: dbField, order: (args.sort.order as "ASC" | "DESC") ?? "ASC" };
+        }
+      }
+
+      const { cards, totalCount } = await searchCards(db, filter, page, pageSize, sort, fetchAll);
+      const totalPages = fetchAll ? 1 : Math.ceil(totalCount / pageSize);
 
       const nodes = await Promise.all(
         cards.map((card) => resolveCardFields(card, db))
@@ -157,9 +182,9 @@ export const resolvers = {
         nodes,
         totalCount,
         pageInfo: {
-          currentPage: page,
+          currentPage: fetchAll ? 1 : page,
           totalPages,
-          hasNextPage: page < totalPages,
+          hasNextPage: fetchAll ? false : page < totalPages,
         },
       };
     },

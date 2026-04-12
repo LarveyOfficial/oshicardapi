@@ -3,8 +3,8 @@ export const typeDefs = /* GraphQL */ `
     """Get a single card by ID or card number"""
     card(id: Int, cardNumber: String): Card
 
-    """Search and filter cards with pagination"""
-    cards(filter: CardFilter, page: Int = 1, pageSize: Int = 20): CardConnection!
+    """Search and filter cards with pagination. Use pageSize: 0 to fetch all matching cards."""
+    cards(filter: CardFilter, sort: CardSort, page: Int = 1, pageSize: Int = 20): CardConnection!
 
     """List all booster/starter sets"""
     sets: [String!]!
@@ -146,5 +146,24 @@ export const typeDefs = /* GraphQL */ `
   enum OshiSkillType {
     OSHI
     SP_OSHI
+  }
+
+  enum CardSortField {
+    NAME
+    CARD_NUMBER
+    HP
+    RARITY
+    COLOR
+    CARD_TYPE
+  }
+
+  enum SortOrder {
+    ASC
+    DESC
+  }
+
+  input CardSort {
+    field: CardSortField!
+    order: SortOrder = ASC
   }
 `;
