@@ -1,7 +1,7 @@
 #!/bin/bash
 # Scrape all cards page by page using scrape-page-ids + scrape-one
 BASE="https://oshicardapi.luisrvervaet.workers.dev"
-PAGE=0
+PAGE=1
 TOTAL=0
 
 echo "Starting scrape..."
