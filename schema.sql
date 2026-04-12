@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS cards (
   id            INTEGER PRIMARY KEY,
-  card_number   TEXT NOT NULL UNIQUE,
+  card_number   TEXT NOT NULL,
   name          TEXT NOT NULL,
   card_type     TEXT NOT NULL,
   color         TEXT NOT NULL,
@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS cards (
   support_type  TEXT,
   is_limited    INTEGER NOT NULL DEFAULT 0,
   special_text  TEXT,
-  scraped_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  scraped_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(card_number, rarity)
 );
 
 CREATE TABLE IF NOT EXISTS card_arts (

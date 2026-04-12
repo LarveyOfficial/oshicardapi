@@ -1,4 +1,4 @@
-import type { Env, CardListItem } from "../types";
+import type { Env, CardListItem, ParsedCard } from "../types";
 import { fetchWithDelay } from "./client";
 import { parseCardList } from "./parseList";
 import { parseCardDetail } from "./parseDetail";
@@ -103,6 +103,46 @@ export async function processQueue(
       }
     }
   }
+}
+
+/**
+ * Scrape all cards from a single search result page.
+ * Fetches the page, extracts card IDs, scrapes each card detail,
+ * saves to DB, and returns all parsed cards.
+ */
+export async function scrapePage(env: Env, page: number): Promise<{ page: number; cards: ParsedCard[]; saved: number }> {
+  const url =
+    page === 0
+      ? `${BASE}/cardlist/cardsearch/`
+      : `${BASE}/cardlist/cardsearch_ex?view=image&page=${page}`;
+
+  const html = await fetchPage(url);
+  if (!html) {
+    return { page, cards: [], saved: 0 };
+  }
+
+  const items = parseCardList(html);
+  if (items.length === 0) {
+    return { page, cards: [], saved: 0 };
+  }
+
+  const cards: ParsedCard[] = [];
+  let saved = 0;
+
+  for (const item of items) {
+    try {
+      const detailHtml = await fetchWithDelay(`${BASE}/cardlist/?id=${item.id}`);
+      if (!detailHtml) continue;
+      const parsed = parseCardDetail(detailHtml, item);
+      await upsertCard(env.DB, parsed);
+      cards.push(parsed);
+      saved++;
+    } catch (err) {
+      console.error(`Failed card ${item.id} (${item.name}):`, err);
+    }
+  }
+
+  return { page, cards, saved };
 }
 
 /** Lightweight fetch for list pages — no delay */
