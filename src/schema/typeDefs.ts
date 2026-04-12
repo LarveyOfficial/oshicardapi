@@ -1,0 +1,139 @@
+export const typeDefs = /* GraphQL */ `
+  type Query {
+    """Get a single card by ID or card number"""
+    card(id: Int, cardNumber: String): Card
+
+    """Search and filter cards with pagination"""
+    cards(filter: CardFilter, page: Int = 1, pageSize: Int = 20): CardConnection!
+
+    """List all booster/starter sets"""
+    sets: [String!]!
+
+    """List all unique tags"""
+    tags: [String!]!
+
+    """List all unique hololive member names (derived from holomem card names)"""
+    members: [String!]!
+
+    """List all unique colors"""
+    colors: [String!]!
+
+    """List all unique rarities"""
+    rarities: [String!]!
+  }
+
+  input CardFilter {
+    cardType: CardType
+    color: Color
+    rarity: String
+    setName: String
+    bloomLevel: String
+    tag: String
+    """Exact match on card name (e.g. "Nanashi Mumei" returns all her cards across holomem, buzz, and oshi)"""
+    name: String
+    """Search by card name (partial match)"""
+    search: String
+    """Filter by support subtype (ITEM, STAFF, MASCOT, FAN, EVENT, TOOL)"""
+    supportType: SupportType
+    """Filter to only limited or non-limited cards"""
+    isLimited: Boolean
+    """Include buzz holomem cards (default: true). Set to false to exclude them."""
+    includeBuzz: Boolean
+  }
+
+  type CardConnection {
+    nodes: [Card!]!
+    totalCount: Int!
+    pageInfo: PageInfo!
+  }
+
+  type PageInfo {
+    currentPage: Int!
+    totalPages: Int!
+    hasNextPage: Boolean!
+  }
+
+  type Card {
+    id: Int!
+    cardNumber: String!
+    name: String!
+    cardType: CardType!
+    color: String!
+    rarity: String!
+    setName: String
+    releaseDate: String
+    illustrator: String
+    imageUrl: String
+    """URL to the card's page on the official website"""
+    cardUrl: String
+    tags: [String!]!
+
+    """HP for holomem cards"""
+    hp: Int
+    """Bloom level for holomem cards (Debut, 1st, 2nd, Spot)"""
+    bloomLevel: String
+    """Baton pass info for holomem cards"""
+    batonPass: String
+    """Life for oshi cards"""
+    life: Int
+    """Whether this is a Buzz holomem card"""
+    isBuzz: Boolean!
+    """Support subtype (Item, Staff, Mascot, Fan, Event, Tool) — only for support cards"""
+    supportType: String
+    """Whether this is a LIMITED card"""
+    isLimited: Boolean!
+    """Additional rules/ability text"""
+    specialText: String
+
+    """Arts/moves for holomem cards"""
+    arts: [Art!]!
+    """Skills for oshi cards"""
+    oshiSkills: [OshiSkill!]!
+  }
+
+  type Art {
+    name: String!
+    damage: Int
+    cost: String
+    effectText: String
+  }
+
+  type OshiSkill {
+    name: String!
+    cost: String
+    usageLimit: String
+    effectText: String!
+    skillType: OshiSkillType!
+  }
+
+  enum CardType {
+    HOLOMEM
+    OSHI
+    SUPPORT
+    CHEER
+  }
+
+  enum SupportType {
+    ITEM
+    STAFF
+    MASCOT
+    FAN
+    EVENT
+    TOOL
+  }
+
+  enum Color {
+    WHITE
+    GREEN
+    RED
+    BLUE
+    PURPLE
+    YELLOW
+    NEUTRAL
+  }
+
+  enum OshiSkillType {
+    OSHI
+    SP_OSHI
+  }
+`;
