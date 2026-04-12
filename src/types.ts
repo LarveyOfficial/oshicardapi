@@ -7,7 +7,6 @@ export interface CardRow {
   card_number: string;
   name: string;
   card_type: string;
-  color: string;
   rarity: string;
   set_name: string | null;
   release_date: string | null;
@@ -57,7 +56,7 @@ export interface ParsedCard {
   cardNumber: string;
   name: string;
   cardType: string;
-  color: string;
+  colors: string[];
   rarity: string;
   setNames: string[];
   releaseDate: string | null;
