@@ -39,15 +39,49 @@ function imgSrcToColor(src: string): string {
   return "COLORLESS";
 }
 
+/** Map kanji color characters to color enums */
+const KANJI_COLOR_MAP: Record<string, string> = {
+  "白": "WHITE",
+  "緑": "GREEN",
+  "赤": "RED",
+  "青": "BLUE",
+  "紫": "PURPLE",
+  "黄": "YELLOW",
+};
+
+/** Extract colors from an alt tag containing kanji (e.g. "青赤" → ["BLUE", "RED"]) */
+function colorsFromAlt(alt: string): string[] {
+  const colors: string[] = [];
+  for (const char of alt) {
+    const color = KANJI_COLOR_MAP[char];
+    if (color && !colors.includes(color)) {
+      colors.push(color);
+    }
+  }
+  return colors;
+}
+
 function extractColors($: cheerio.CheerioAPI): string[] {
   const colors: string[] = [];
   $(".info img[src*='type_']").each((_, img) => {
-    const src = $(img).attr("src") || "";
-    const mapped = imgSrcToColor(src);
-    // For card color, COLORLESS maps to NEUTRAL
-    const color = mapped === "COLORLESS" ? "NEUTRAL" : mapped;
-    if (!colors.includes(color)) {
-      colors.push(color);
+    const el = $(img);
+    const alt = el.attr("alt") || "";
+    // Parse colors from alt tag kanji (handles both single "赤" and combined "青赤")
+    const altColors = colorsFromAlt(alt);
+    if (altColors.length > 0) {
+      for (const color of altColors) {
+        if (!colors.includes(color)) {
+          colors.push(color);
+        }
+      }
+    } else {
+      // Fallback to src-based parsing for arts images or missing alt tags
+      const src = el.attr("src") || "";
+      const mapped = imgSrcToColor(src);
+      const color = mapped === "COLORLESS" ? "NEUTRAL" : mapped;
+      if (!colors.includes(color)) {
+        colors.push(color);
+      }
     }
   });
   return colors.length > 0 ? colors : ["NEUTRAL"];

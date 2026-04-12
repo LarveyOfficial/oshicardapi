@@ -13,7 +13,7 @@ export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void
       card.cardNumber,
       card.name,
       card.cardType,
-      card.colors[0] || "NEUTRAL",
+      card.colors.join(", ") || "NEUTRAL",
       card.rarity,
       card.setNames.length > 0 ? card.setNames[0] : null,
       card.releaseDate,
