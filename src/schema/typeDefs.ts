@@ -155,6 +155,8 @@ export const typeDefs = /* GraphQL */ `
     RARITY
     COLOR
     CARD_TYPE
+    RELEASE_DATE
+    ID
   }
 
   enum SortOrder {

@@ -71,6 +71,8 @@ const SORT_FIELD_MAP: Record<string, string> = {
   RARITY: "c.rarity",
   COLOR: "c.color",
   CARD_TYPE: "c.card_type",
+  RELEASE_DATE: "c.release_date",
+  ID: "c.id",
 };
 
 async function resolveCardFields(card: CardRow, db: D1Database) {
