@@ -2,11 +2,11 @@
 
 A free, public GraphQL API for the **hololive Official Card Game (hOCG)**. Query every card in the game — holomem, oshi, support, and cheer cards — with full filtering, pagination, and search.
 
-Data is automatically scraped from the [official English card list](https://en.hololive-official-cardgame.com/cardlist/cardsearch/) and updated weekly.
+Data is automatically scraped from the [official English card list](https://en.hololive-official-cardgame.com/cardlist/cardsearch/) and updated daily via GitHub Actions.
 
 ## Live API
 
-> **GraphQL Endpoint**: `https://oshicardapi.<your-subdomain>.workers.dev/graphql`
+> **GraphQL Endpoint**: `https://oshicardapi.luisrvervaet.workers.dev/graphql`
 >
 > **GraphiQL Playground**: Visit the endpoint in your browser to explore the API interactively.
 
@@ -42,14 +42,14 @@ Query the API with any GraphQL client, `curl`, or the built-in GraphiQL playgrou
 
 ```bash
 # Get all cards
-curl -X POST https://your-api.workers.dev/graphql \
+curl -X POST https://oshicardapi.luisrvervaet.workers.dev/graphql \
   -H 'Content-Type: application/json' \
   -d '{"query":"{ cards { totalCount nodes { name cardType color rarity } } }"}'
 
 # Get a specific card by number
-curl -X POST https://your-api.workers.dev/graphql \
+curl -X POST https://oshicardapi.luisrvervaet.workers.dev/graphql \
   -H 'Content-Type: application/json' \
-  -d '{"query":"{ card(cardNumber: \"hBP01-020\") { name hp arts { name damage } tags } }"}'
+  -d '{"query":"{ card(cardNumber: \"hBP01-020\") { name hp arts { name damage cost } tags } }"}'
 ```
 
 ---
@@ -86,7 +86,7 @@ The `cards` query accepts a `filter` input with these fields:
 | `isLimited` | `Boolean` | Filter by LIMITED status. `true` = only LIMITED cards, `false` = only non-LIMITED cards. |
 | `includeBuzz` | `Boolean` | Whether to include Buzz holomem cards. Defaults to `true`. Set to `false` to exclude them. |
 
-All filters are optional and can be combined. For example, you can filter for all white holomem cards from a specific set that have a specific tag.
+All filters are optional and can be combined.
 
 ### Pagination
 
@@ -109,8 +109,6 @@ type PageInfo {
 - `page` defaults to `1`
 - `pageSize` defaults to `20`, maximum `500`
 
-To fetch all cards at once, use `pageSize: 500` (or higher pages if needed).
-
 ### Card Types
 
 Every card has these common fields:
@@ -121,7 +119,7 @@ type Card {
   cardNumber: String!     # Official card number (e.g., "hBP01-020")
   name: String!           # Card name (holomem/oshi = member name)
   cardType: CardType!     # HOLOMEM, OSHI, SUPPORT, or CHEER
-  color: String!          # White, Green, Red, Blue, Purple, Yellow, or Neutral
+  color: String!          # RED, GREEN, BLUE, WHITE, PURPLE, YELLOW, or NEUTRAL
   rarity: String!         # C, U, R, RR, SR, SSR, OSR, SEC, etc.
   setName: String         # Booster pack or starter deck name
   releaseDate: String     # Release date string
@@ -133,9 +131,10 @@ type Card {
   # Holomem-specific
   hp: Int                 # Hit points (holomem only)
   bloomLevel: String      # Debut, 1st, 2nd, or Spot (holomem only)
-  batonPass: String       # Baton pass cost icons (holomem only)
+  batonPass: [String!]    # Baton pass cost as color array (e.g., ["COLORLESS", "COLORLESS"])
   isBuzz: Boolean!        # Whether this is a Buzz holomem card
   arts: [Art!]!           # Moves/attacks (holomem only)
+  extraText: String       # Extra text (e.g., "If this holomem is downed, you get life-2")
 
   # Oshi-specific
   life: Int               # Life points (oshi only)
@@ -154,7 +153,7 @@ type Card {
 type Art {
   name: String!           # Move name (e.g., "Everyone Together")
   damage: Int             # Base damage value (e.g., 70)
-  cost: String            # Cost icons as text (e.g., "白, ◇, ◇")
+  cost: [String!]         # Cost as color array (e.g., ["RED", "COLORLESS", "COLORLESS"])
   effectText: String      # Move effect description
 }
 ```
@@ -212,8 +211,6 @@ enum OshiSkillType {
 
 ### Get all cards for a specific hololive member
 
-Returns all holomem, buzz holomem, and oshi cards for that member across all sets and bloom levels.
-
 ```graphql
 {
   cards(filter: { name: "Nanashi Mumei" }) {
@@ -230,6 +227,7 @@ Returns all holomem, buzz holomem, and oshi cards for that member across all set
       arts {
         name
         damage
+        cost
         effectText
       }
       oshiSkills {
@@ -238,102 +236,6 @@ Returns all holomem, buzz holomem, and oshi cards for that member across all set
         effectText
         skillType
       }
-    }
-  }
-}
-```
-
-### List all hololive members
-
-```graphql
-{
-  members
-}
-```
-
-Returns: `["Aki Rosenthal", "Amane Kanata", "Gawr Gura", "Nanashi Mumei", "Tokino Sora", ...]`
-
-### Get all cards from a specific set
-
-```graphql
-{
-  cards(filter: { setName: "Booster Pack – Blooming Radiance" }, pageSize: 500) {
-    totalCount
-    nodes {
-      name
-      cardNumber
-      cardType
-      rarity
-      color
-    }
-  }
-}
-```
-
-### List all available sets
-
-```graphql
-{
-  sets
-}
-```
-
-### Filter by tag
-
-```graphql
-{
-  cards(filter: { tag: "#EN" }) {
-    totalCount
-    nodes {
-      name
-      cardNumber
-      tags
-    }
-  }
-}
-```
-
-### Get all support items that are LIMITED
-
-```graphql
-{
-  cards(filter: { supportType: ITEM, isLimited: true }) {
-    nodes {
-      name
-      cardNumber
-      supportType
-      isLimited
-      specialText
-    }
-  }
-}
-```
-
-### Get all holomem cards excluding Buzz
-
-```graphql
-{
-  cards(filter: { cardType: HOLOMEM, includeBuzz: false }) {
-    totalCount
-    nodes {
-      name
-      bloomLevel
-      hp
-      isBuzz
-    }
-  }
-}
-```
-
-### Search by partial name
-
-```graphql
-{
-  cards(filter: { search: "Sora" }) {
-    nodes {
-      name
-      cardNumber
-      cardType
     }
   }
 }
@@ -354,6 +256,13 @@ Returns: `["Aki Rosenthal", "Amane Kanata", "Gawr Gura", "Nanashi Mumei", "Tokin
     cardUrl
     setName
     releaseDate
+    batonPass
+    extraText
+    arts {
+      name
+      damage
+      cost
+    }
     oshiSkills {
       name
       cost
@@ -365,7 +274,7 @@ Returns: `["Aki Rosenthal", "Amane Kanata", "Gawr Gura", "Nanashi Mumei", "Tokin
 }
 ```
 
-### Combine multiple filters
+### Filter by multiple criteria
 
 ```graphql
 {
@@ -392,7 +301,38 @@ Returns: `["Aki Rosenthal", "Amane Kanata", "Gawr Gura", "Nanashi Mumei", "Tokin
       arts {
         name
         damage
+        cost
       }
+    }
+  }
+}
+```
+
+### Get all support items that are LIMITED
+
+```graphql
+{
+  cards(filter: { supportType: ITEM, isLimited: true }) {
+    nodes {
+      name
+      cardNumber
+      supportType
+      isLimited
+      specialText
+    }
+  }
+}
+```
+
+### Search by partial name
+
+```graphql
+{
+  cards(filter: { search: "Sora" }) {
+    nodes {
+      name
+      cardNumber
+      cardType
     }
   }
 }
@@ -408,6 +348,7 @@ Useful for building filter UIs.
   colors
   rarities
   sets
+  members
 }
 ```
 
@@ -423,127 +364,75 @@ Useful for building filter UIs.
 | Database | Cloudflare D1 (SQLite) | Free tier (5M reads/day, 5GB), co-located with Worker |
 | GraphQL | graphql-yoga | Lightweight, Workers-compatible, built-in GraphiQL |
 | Scraper | cheerio | Fast HTML parsing without a browser, works in Workers |
+| Automation | GitHub Actions | Daily cron to scrape all cards (free for public repos) |
 | Deploy | Wrangler CLI | Official Cloudflare tooling |
 
 ### Project Structure
 
 ```
 oshicardapi/
-  wrangler.toml              # Cloudflare Workers config
-  │                          #   - D1 database binding
-  │                          #   - Cron trigger (weekly Monday 3 AM UTC)
-  │
-  schema.sql                 # Database schema (5 tables, 8 indexes)
-  package.json               # Dependencies and scripts
-  tsconfig.json              # TypeScript config
-  │
+  wrangler.toml              # Cloudflare Workers config + D1 binding
+  schema.sql                 # Database schema (5 tables)
+  scrape-all.sh              # Local scrape script
+  .github/workflows/
+    scrape.yml               # Daily GitHub Actions cron (3 AM UTC)
   src/
-    index.ts                 # Worker entry point
-    │                        #   - GET /          → health check
-    │                        #   - GET /graphql   → GraphiQL playground
-    │                        #   - POST /graphql  → GraphQL queries
-    │                        #   - GET /scrape    → trigger scrape batch
-    │                        #   - GET /scrape-one?id=N → scrape single card
-    │                        #   - scheduled()    → cron handler
-    │
+    index.ts                 # Worker entry point (routes + endpoints)
     types.ts                 # TypeScript interfaces
-    │                        #   - Env (D1 binding)
-    │                        #   - CardRow, ArtRow, OshiSkillRow (DB rows)
-    │                        #   - ParsedCard, ParsedArt, ParsedOshiSkill (scraper output)
-    │
     schema/
       typeDefs.ts            # GraphQL schema definition
-      resolvers.ts           # Query resolvers (D1 → GraphQL)
-    │
+      resolvers.ts           # Query resolvers (D1 -> GraphQL)
     db/
-      queries.ts             # Parameterized SQL queries
-    │                        #   - upsertCard (scraper → DB)
-    │                        #   - searchCards (filtered + paginated)
-    │                        #   - getCardById, getCardByNumber
-    │                        #   - getArtsForCard, getSkillsForCard, getTagsForCard
-    │                        #   - getAllSets, getAllTags, getAllMembers, etc.
-    │
+      queries.ts             # SQL query builders
     scraper/
-      index.ts               # Scrape orchestrator (batch processing)
+      index.ts               # getPageIds, scrapePage helpers
       parseList.ts           # Card ID extractor from search pages
-      parseDetail.ts         # Card detail HTML → ParsedCard
-      client.ts              # HTTP fetch with 1s delay + exponential backoff retry
+      parseDetail.ts         # Card detail HTML -> ParsedCard
+      client.ts              # HTTP fetch with 500ms delay + retry
 ```
 
 ### Database Schema
 
-The database uses 5 tables:
-
-**`cards`** — One row per card. Contains all common fields plus type-specific nullable fields.
+**`cards`** — One row per card (unique on `card_number` + `rarity`).
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | INTEGER PK | Internal ID from the official site |
-| `card_number` | TEXT UNIQUE | Official card number (e.g., `hBP01-020`) |
+| `card_number` | TEXT | Official card number (e.g., `hBP01-020`) |
 | `name` | TEXT | Card name |
 | `card_type` | TEXT | `holomem`, `oshi`, `support`, or `cheer` |
-| `color` | TEXT | White, Green, Red, Blue, Purple, Yellow, or Neutral |
+| `color` | TEXT | `RED`, `GREEN`, `BLUE`, `WHITE`, `PURPLE`, `YELLOW`, or `NEUTRAL` |
 | `rarity` | TEXT | C, U, R, RR, SR, SSR, OSR, SEC, etc. |
-| `set_name` | TEXT | Booster pack or starter deck name |
-| `release_date` | TEXT | Release date |
-| `illustrator` | TEXT | Illustrator name |
-| `image_url` | TEXT | Full URL to card image |
-| `card_url` | TEXT | Full URL to card detail page |
 | `hp` | INTEGER | Holomem HP |
 | `bloom_level` | TEXT | Debut, 1st, 2nd, Spot |
-| `baton_pass` | TEXT | Baton pass cost icons |
+| `baton_pass` | TEXT | JSON array of colors (e.g., `["COLORLESS","COLORLESS"]`) |
 | `life` | INTEGER | Oshi life points |
-| `is_buzz` | INTEGER | 1 if Buzz holomem, 0 otherwise |
+| `is_buzz` | INTEGER | 1 if Buzz holomem |
 | `support_type` | TEXT | Item, Staff, Mascot, Fan, Event, Tool |
-| `is_limited` | INTEGER | 1 if LIMITED, 0 otherwise |
-| `special_text` | TEXT | Ability text, special rules |
-| `scraped_at` | TEXT | Timestamp of last scrape |
+| `is_limited` | INTEGER | 1 if LIMITED |
+| `extra_text` | TEXT | Extra card text |
+| `special_text` | TEXT | Ability/rules text |
 
-**`card_arts`** — Holomem moves/attacks. One row per art per card.
+**`card_arts`** — Holomem moves. `cost` is a JSON array of colors (e.g., `["RED","COLORLESS","COLORLESS"]`).
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `card_id` | INTEGER FK | References `cards.id` |
-| `name` | TEXT | Art/move name |
-| `damage` | INTEGER | Base damage value |
-| `cost` | TEXT | Cost icons as text |
-| `effect_text` | TEXT | Effect description |
-| `sort_order` | INTEGER | Order of the art on the card |
+**`card_oshi_skills`** — Oshi skills (regular + SP).
 
-**`card_oshi_skills`** — Oshi skills. Up to 2 per oshi card (regular + SP).
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `card_id` | INTEGER FK | References `cards.id` |
-| `skill_type` | TEXT | `oshi` or `sp_oshi` |
-| `name` | TEXT | Skill name |
-| `cost` | TEXT | holo Power cost (e.g., `-2`) |
-| `usage_limit` | TEXT | `1/Turn` or `1/Game` |
-| `effect_text` | TEXT | Skill effect description |
-
-**`card_tags`** — Card tags. Multiple tags per card (e.g., `#EN`, `#Gen 1`, `#Bird`).
-
-**`scrape_state`** — Key-value store for scraper progress tracking between batched cron runs.
+**`card_tags`** — Card hashtags (e.g., `#EN`, `#Gen 1`).
 
 ### Scraper
 
-The scraper runs in two phases:
+The scraper uses two lightweight endpoints:
 
-1. **Collect card IDs**: Paginates through the official search results (`/cardsearch_ex?view=image&page=N`), parsing `<a>` links to extract card IDs. Stores the full ID list in `scrape_state`.
+1. **`/scrape-page-ids?page=N`** — Fetches a search result page and returns an array of card IDs
+2. **`/scrape-one?id=N`** — Fetches a single card detail page, parses it with cheerio, and upserts into D1
 
-2. **Scrape card details**: For each card ID, fetches the detail page (`/cardlist/?id=N`) and parses the HTML using cheerio. The parser extracts:
-   - Card name from `h1.name`
-   - Card info from `dl > dt/dd` pairs inside `.info`
-   - Color from `img[src*='type_']` icons
-   - Tags from `a[href*='cardsearch?keyword=%23']` links
-   - Arts from `div[class*='arts']` elements
-   - Oshi skills from `div.oshi.skill` and `div.sp.skill`
-   - Illustrator from `p.ill-name span`
-   - Card number from `p.number span`
+A GitHub Actions cron job runs daily at 3 AM UTC, calling these endpoints sequentially:
+- Fetches page IDs starting from page 0
+- For each ID, calls `/scrape-one` with a 500ms delay between cards
+- 5 second pause between pages to avoid rate limiting
+- Stops when a page returns an empty array
 
-**Batching**: Cloudflare Workers have a 30-second CPU time limit. The scraper processes 50 cards per invocation, saving its progress in `scrape_state`. The cron trigger runs weekly; hitting `/scrape` manually triggers additional batches.
-
-**Rate limiting**: The scraper waits 1 second between requests and uses exponential backoff on 429/5xx errors to be respectful to the source site.
+The same flow can be run locally via `./scrape-all.sh`.
 
 ---
 
@@ -558,71 +447,31 @@ The scraper runs in two phases:
 ### Local Development
 
 ```bash
-# Install dependencies
 npm install
-
-# Create and initialize the local D1 database
 npm run db:init
-
-# Start the dev server
 npm run dev
 ```
 
 The dev server runs at `http://localhost:8787`. Visit `/graphql` for the GraphiQL playground.
 
-To test the scraper locally:
-
-```bash
-# Scrape a single card (for testing the parser)
-curl "http://localhost:8787/scrape-one?id=1"
-
-# Trigger a full scrape batch (50 cards)
-curl "http://localhost:8787/scrape"
-
-# Trigger via cron simulation
-curl "http://localhost:8787/cdn-cgi/handler/scheduled"
-```
-
 ### Deploying to Cloudflare
 
 ```bash
-# 1. Login to Cloudflare
 npx wrangler login
-
-# 2. Create the D1 database
 npx wrangler d1 create oshicard-db
-# Copy the database_id from the output
-
-# 3. Update wrangler.toml with your database_id
-# Replace "placeholder" with the actual ID
-
-# 4. Apply the database schema to the remote D1
+# Update database_id in wrangler.toml
 npm run db:init:remote
-
-# 5. Deploy the Worker
 npm run deploy
 ```
 
 ### Populating the Database
 
-After deploying, the database is empty. You need to trigger the scraper:
-
 ```bash
-# Trigger a scrape batch (processes ~50 cards per call)
-curl "https://your-api.workers.dev/scrape"
+# Run the scrape script locally
+./scrape-all.sh
 
-# Check progress
-curl "https://your-api.workers.dev/"
-# Returns: {"status":"ok","cardCount":50,"graphql":"/graphql"}
-
-# Keep triggering until all cards are scraped (~1400+ cards)
-# Each call processes the next batch of 50
-curl "https://your-api.workers.dev/scrape"
-curl "https://your-api.workers.dev/scrape"
-# ...repeat until cardCount stops growing
+# Or trigger the GitHub Action manually from the Actions tab
 ```
-
-The weekly cron trigger (`Monday 3 AM UTC`) will automatically re-scrape to pick up new card releases.
 
 ---
 
@@ -630,12 +479,12 @@ The weekly cron trigger (`Monday 3 AM UTC`) will automatically re-scrape to pick
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/` | GET | Health check — returns `{"status":"ok","cardCount":N,"graphql":"/graphql"}` |
-| `/health` | GET | Same as `/` |
+| `/` | GET | Health check — returns card count |
 | `/graphql` | GET | GraphiQL interactive playground |
 | `/graphql` | POST | GraphQL query endpoint |
-| `/scrape` | GET | Trigger a scrape batch (50 cards) |
-| `/scrape-one?id=N` | GET | Scrape a single card by ID (returns parsed JSON) |
+| `/scrape-page-ids?page=N` | GET | Get card IDs from search page N |
+| `/scrape-one?id=N` | GET | Scrape and save a single card |
+| `/scrape-status` | GET | Returns current card count |
 
 ---
 
