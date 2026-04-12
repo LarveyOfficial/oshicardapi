@@ -1,0 +1,11 @@
+name = "oshicardapi"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+
+[triggers]
+crons = ["0 3 * * 1"]  # Every Monday at 3 AM UTC
+
+[[d1_databases]]
+binding = "DB"
+database_name = "oshicard-db"
+database_id = "placeholder"
