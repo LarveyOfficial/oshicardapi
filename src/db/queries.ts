@@ -244,6 +244,102 @@ export async function getSetsForCard(db: D1Database, cardId: number): Promise<st
   return result.results.map((r) => r.set_name);
 }
 
+// --- Batch loading (avoids N+1 queries) ---
+
+const BATCH_SIZE = 80; // D1 limit is 100 bind params, leave room for other params
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function batchQuery<T>(
+  db: D1Database,
+  cardIds: number[],
+  buildQuery: (placeholders: string) => string,
+): Promise<T[]> {
+  if (cardIds.length === 0) return [];
+  const chunks_ = chunk(cardIds, BATCH_SIZE);
+  const results: T[] = [];
+  for (const batch of chunks_) {
+    const placeholders = batch.map(() => "?").join(",");
+    const result = await db
+      .prepare(buildQuery(placeholders))
+      .bind(...batch)
+      .all<T>();
+    results.push(...result.results);
+  }
+  return results;
+}
+
+export async function batchGetArts(db: D1Database, cardIds: number[]): Promise<Map<number, ArtRow[]>> {
+  const rows = await batchQuery<ArtRow>(db, cardIds, (p) =>
+    `SELECT * FROM card_arts WHERE card_id IN (${p}) ORDER BY card_id, sort_order`
+  );
+  const map = new Map<number, ArtRow[]>();
+  for (const row of rows) {
+    const existing = map.get(row.card_id) || [];
+    existing.push(row);
+    map.set(row.card_id, existing);
+  }
+  return map;
+}
+
+export async function batchGetSkills(db: D1Database, cardIds: number[]): Promise<Map<number, OshiSkillRow[]>> {
+  const rows = await batchQuery<OshiSkillRow>(db, cardIds, (p) =>
+    `SELECT * FROM card_oshi_skills WHERE card_id IN (${p})`
+  );
+  const map = new Map<number, OshiSkillRow[]>();
+  for (const row of rows) {
+    const existing = map.get(row.card_id) || [];
+    existing.push(row);
+    map.set(row.card_id, existing);
+  }
+  return map;
+}
+
+export async function batchGetTags(db: D1Database, cardIds: number[]): Promise<Map<number, string[]>> {
+  const rows = await batchQuery<{ card_id: number; tag: string }>(db, cardIds, (p) =>
+    `SELECT card_id, tag FROM card_tags WHERE card_id IN (${p})`
+  );
+  const map = new Map<number, string[]>();
+  for (const row of rows) {
+    const existing = map.get(row.card_id) || [];
+    existing.push(row.tag);
+    map.set(row.card_id, existing);
+  }
+  return map;
+}
+
+export async function batchGetQna(db: D1Database, cardIds: number[]): Promise<Map<number, { question: string; answer: string }[]>> {
+  const rows = await batchQuery<{ card_id: number; question: string; answer: string }>(db, cardIds, (p) =>
+    `SELECT card_id, question, answer FROM card_qna WHERE card_id IN (${p}) ORDER BY card_id, sort_order`
+  );
+  const map = new Map<number, { question: string; answer: string }[]>();
+  for (const row of rows) {
+    const existing = map.get(row.card_id) || [];
+    existing.push({ question: row.question, answer: row.answer });
+    map.set(row.card_id, existing);
+  }
+  return map;
+}
+
+export async function batchGetSets(db: D1Database, cardIds: number[]): Promise<Map<number, string[]>> {
+  const rows = await batchQuery<{ card_id: number; set_name: string }>(db, cardIds, (p) =>
+    `SELECT card_id, set_name FROM card_sets WHERE card_id IN (${p}) ORDER BY card_id, set_name`
+  );
+  const map = new Map<number, string[]>();
+  for (const row of rows) {
+    const existing = map.get(row.card_id) || [];
+    existing.push(row.set_name);
+    map.set(row.card_id, existing);
+  }
+  return map;
+}
+
 export async function getAllSets(db: D1Database): Promise<string[]> {
   const result = await db
     .prepare("SELECT DISTINCT set_name FROM card_sets ORDER BY set_name")
