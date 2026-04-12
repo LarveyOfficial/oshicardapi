@@ -20,6 +20,9 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, void> {
 
       totalSaved += saved;
       page++;
+
+      // Wait between pages to avoid rate limiting from source site
+      await step.sleep(`delay-${page}`, "5 seconds");
     }
 
     return { totalSaved, pagesScraped: page };

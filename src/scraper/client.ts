@@ -1,4 +1,4 @@
-const DELAY_MS = 200;
+const DELAY_MS = 500;
 const MAX_RETRIES = 3;
 
 function sleep(ms: number): Promise<void> {
