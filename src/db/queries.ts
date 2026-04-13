@@ -85,10 +85,10 @@ export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void
 
   // Replace colors
   await db.prepare("DELETE FROM card_colors WHERE card_id = ?").bind(card.id).run();
-  for (const color of card.colors) {
+  for (let i = 0; i < card.colors.length; i++) {
     await db
-      .prepare("INSERT INTO card_colors (card_id, color) VALUES (?, ?)")
-      .bind(card.id, color)
+      .prepare("INSERT INTO card_colors (card_id, color, sort_order) VALUES (?, ?, ?)")
+      .bind(card.id, card.colors[i], i)
       .run();
   }
 }
@@ -231,7 +231,7 @@ export async function getSkillsForCard(db: D1Database, cardId: number): Promise<
 
 export async function getColorsForCard(db: D1Database, cardId: number): Promise<string[]> {
   const result = await db
-    .prepare("SELECT color FROM card_colors WHERE card_id = ?")
+    .prepare("SELECT color FROM card_colors WHERE card_id = ? ORDER BY sort_order")
     .bind(cardId)
     .all<{ color: string }>();
   return result.results.map((r) => r.color);
@@ -319,7 +319,7 @@ export async function batchGetSkills(db: D1Database, cardIds: number[]): Promise
 
 export async function batchGetColors(db: D1Database, cardIds: number[]): Promise<Map<number, string[]>> {
   const rows = await batchQuery<{ card_id: number; color: string }>(db, cardIds, (p) =>
-    `SELECT card_id, color FROM card_colors WHERE card_id IN (${p})`
+    `SELECT card_id, color FROM card_colors WHERE card_id IN (${p}) ORDER BY card_id, sort_order`
   );
   const map = new Map<number, string[]>();
   for (const row of rows) {
