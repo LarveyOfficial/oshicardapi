@@ -81,7 +81,7 @@ export interface ParsedCard {
 
 export interface DamageBonus {
   amount: string;
-  color: string;
+  colors: string[];
 }
 
 export interface ParsedArt {

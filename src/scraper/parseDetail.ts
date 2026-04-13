@@ -143,20 +143,16 @@ function extractArts($: cheerio.CheerioAPI): ParsedArt[] {
       costParts.push(imgSrcToColor(src));
     });
 
-    // Extract bonus damage from tokkou images (e.g. tokkou_50_white.png, alt="白+50")
-    const damageBonuses: { amount: string; color: string }[] = [];
+    // Extract bonus damage from tokkou images (e.g. tokkou_50_white.png, alt="白+50" or "青赤+50")
+    const damageBonuses: { amount: string; colors: string[] }[] = [];
     span.find("img[src*='tokkou']").each((_, img) => {
       const alt = $(img).attr("alt") || "";
-      // Alt format: "白+50" — kanji color followed by +amount
-      const bonusMatch = alt.match(/([白緑赤青紫黄])\+(\d+\+?)/);
+      // Alt format: "白+50" or "青赤+50" — kanji color(s) followed by +amount
+      const bonusMatch = alt.match(/([白緑赤青紫黄]+)\+(\d+\+?)/);
       if (bonusMatch) {
-        const kanjiToColor: Record<string, string> = {
-          "白": "WHITE", "緑": "GREEN", "赤": "RED",
-          "青": "BLUE", "紫": "PURPLE", "黄": "YELLOW",
-        };
-        const color = kanjiToColor[bonusMatch[1]];
-        if (color) {
-          damageBonuses.push({ amount: `+${bonusMatch[2]}`, color });
+        const bonusColors = colorsFromAlt(bonusMatch[1]);
+        if (bonusColors.length > 0) {
+          damageBonuses.push({ amount: `+${bonusMatch[2]}`, colors: bonusColors });
         }
       }
     });

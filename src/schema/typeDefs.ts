@@ -118,8 +118,8 @@ export const typeDefs = /* GraphQL */ `
   type DamageBonus {
     """Bonus amount as string (e.g. "+50")"""
     amount: String!
-    """Color that triggers the bonus"""
-    color: String!
+    """Colors that trigger the bonus"""
+    colors: [String!]!
   }
 
   type OshiSkill {
