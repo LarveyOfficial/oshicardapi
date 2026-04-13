@@ -115,6 +115,7 @@ async function resolveCardFields(card: CardRow, db: D1Database) {
       damage: a.damage,
       cost: a.cost ? JSON.parse(a.cost) : null,
       effectText: a.effect_text,
+      damageBonuses: a.damage_bonuses ? JSON.parse(a.damage_bonuses) : [],
     })),
     qna,
     oshiSkills: oshiSkills.map((s: OshiSkillRow) => ({
@@ -164,6 +165,7 @@ function mapCardRow(
       damage: a.damage,
       cost: a.cost ? JSON.parse(a.cost) : null,
       effectText: a.effect_text,
+      damageBonuses: a.damage_bonuses ? JSON.parse(a.damage_bonuses) : [],
     })),
     qna,
     oshiSkills: oshiSkills.map((s: OshiSkillRow) => ({

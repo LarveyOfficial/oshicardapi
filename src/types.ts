@@ -29,9 +29,10 @@ export interface ArtRow {
   id: number;
   card_id: number;
   name: string;
-  damage: number | null;
+  damage: string | null;
   cost: string | null;
   effect_text: string | null;
+  damage_bonuses: string | null;
   sort_order: number;
 }
 
@@ -78,11 +79,17 @@ export interface ParsedCard {
   qna: ParsedQA[];
 }
 
+export interface DamageBonus {
+  amount: string;
+  colors: string[];
+}
+
 export interface ParsedArt {
   name: string;
-  damage: number | null;
+  damage: string | null;
   cost: string[] | null;
   effectText: string | null;
+  damageBonuses: DamageBonus[];
 }
 
 export interface ParsedQA {

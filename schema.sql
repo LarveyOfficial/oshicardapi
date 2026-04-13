@@ -23,13 +23,14 @@ CREATE TABLE IF NOT EXISTS cards (
 );
 
 CREATE TABLE IF NOT EXISTS card_arts (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  card_id     INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
-  name        TEXT NOT NULL,
-  damage      INTEGER,
-  cost        TEXT,
-  effect_text TEXT,
-  sort_order  INTEGER NOT NULL DEFAULT 0,
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  card_id         INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  name            TEXT NOT NULL,
+  damage          TEXT,
+  cost            TEXT,
+  effect_text     TEXT,
+  damage_bonuses  TEXT,
+  sort_order      INTEGER NOT NULL DEFAULT 0,
   UNIQUE(card_id, sort_order)
 );
 
