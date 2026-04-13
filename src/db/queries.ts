@@ -38,9 +38,9 @@ export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void
     const art = card.arts[i];
     await db
       .prepare(
-        "INSERT INTO card_arts (card_id, name, damage, cost, effect_text, sort_order) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO card_arts (card_id, name, damage, cost, effect_text, damage_bonuses, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)"
       )
-      .bind(card.id, art.name, art.damage, art.cost ? JSON.stringify(art.cost) : null, art.effectText, i)
+      .bind(card.id, art.name, art.damage, art.cost ? JSON.stringify(art.cost) : null, art.effectText, art.damageBonuses.length > 0 ? JSON.stringify(art.damageBonuses) : null, i)
       .run();
   }
 

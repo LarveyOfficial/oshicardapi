@@ -106,10 +106,20 @@ export const typeDefs = /* GraphQL */ `
 
   type Art {
     name: String!
-    damage: Int
+    """Damage value as string to preserve modifiers like "100+" """
+    damage: String
     """Cost as array of colors (RED, GREEN, BLUE, WHITE, PURPLE, YELLOW, COLORLESS)"""
     cost: [String!]
     effectText: String
+    """Bonus damage against specific colors (e.g. +50 vs WHITE)"""
+    damageBonuses: [DamageBonus!]!
+  }
+
+  type DamageBonus {
+    """Bonus amount as string (e.g. "+50")"""
+    amount: String!
+    """Color that triggers the bonus"""
+    color: String!
   }
 
   type OshiSkill {

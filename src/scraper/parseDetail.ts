@@ -120,14 +120,14 @@ function extractArts($: cheerio.CheerioAPI): ParsedArt[] {
     const spanText = sanitize(span.text());
 
     // The art name is the text content after cost icons, damage is at the end
-    // Pattern: "Everyone Together　70+紫+50" or "Alo~na!　30"
-    const artMatch = spanText.match(/(.+?)\s*[　\s]+(\d+)(?:\+.*)?$/);
+    // Pattern: "Everyone Together　70+紫+50" or "Alo~na!　30" or "Peacock Dance　100+"
+    const artMatch = spanText.match(/(.+?)\s*[　\s]+(\d+\+?)(?:[白緑赤青紫黄].*)?$/);
     let name = "";
-    let damage: number | null = null;
+    let damage: string | null = null;
 
     if (artMatch) {
       name = artMatch[1].replace(/^[◇白緑赤青紫黄]+/, "").trim();
-      damage = parseInt(artMatch[2], 10);
+      damage = artMatch[2];
     } else {
       // No damage number - might be a special art
       name = spanText.replace(/^[◇白緑赤青紫黄]+/, "").trim();
@@ -137,10 +137,28 @@ function extractArts($: cheerio.CheerioAPI): ParsedArt[] {
     // Collect ALL icons (no dedup) to preserve costs like [RED, COLORLESS, COLORLESS]
     const costParts: string[] = [];
     span.find("img[src*='arts_']").each((_, img) => {
-      // Skip tokkou (bonus) images
-      if ($(img).closest(".tokkou").length) return;
       const src = $(img).attr("src") || "";
+      // Skip tokkou (bonus damage) images
+      if (src.includes("tokkou")) return;
       costParts.push(imgSrcToColor(src));
+    });
+
+    // Extract bonus damage from tokkou images (e.g. tokkou_50_white.png, alt="白+50")
+    const damageBonuses: { amount: string; color: string }[] = [];
+    span.find("img[src*='tokkou']").each((_, img) => {
+      const alt = $(img).attr("alt") || "";
+      // Alt format: "白+50" — kanji color followed by +amount
+      const bonusMatch = alt.match(/([白緑赤青紫黄])\+(\d+\+?)/);
+      if (bonusMatch) {
+        const kanjiToColor: Record<string, string> = {
+          "白": "WHITE", "緑": "GREEN", "赤": "RED",
+          "青": "BLUE", "紫": "PURPLE", "黄": "YELLOW",
+        };
+        const color = kanjiToColor[bonusMatch[1]];
+        if (color) {
+          damageBonuses.push({ amount: `+${bonusMatch[2]}`, color });
+        }
+      }
     });
 
     // Effect text is the text content of the p after the span
@@ -151,9 +169,10 @@ function extractArts($: cheerio.CheerioAPI): ParsedArt[] {
     if (name) {
       arts.push({
         name,
-        damage: damage && !isNaN(damage) ? damage : null,
+        damage,
         cost: costParts.length > 0 ? costParts : null,
         effectText,
+        damageBonuses,
       });
     }
   });
@@ -396,6 +415,7 @@ export function parseCardDetail(
       damage: null,
       cost: null,
       effectText: keyword.effectText,
+      damageBonuses: [],
     });
   }
 
