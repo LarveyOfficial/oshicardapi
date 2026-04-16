@@ -1,5 +1,8 @@
 name: "Scrape: Dev"
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
     inputs:
