@@ -1,5 +1,8 @@
 name: "Scrape: Production"
 
+permissions:
+  contents: read
+
 on:
   schedule:
     - cron: "0 3 * * *" # Daily at 3 AM UTC
