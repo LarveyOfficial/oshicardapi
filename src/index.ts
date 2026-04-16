@@ -61,7 +61,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
       });
     } catch (err) {
       log("error", "Failed to scrape page IDs", { page, error: String(err) });
-      return new Response(JSON.stringify({ error: String(err) }), {
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       });
@@ -83,7 +83,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
       });
     } catch (err) {
       log("error", "Failed to scrape card", { cardId, error: String(err) });
-      return new Response(JSON.stringify({ error: String(err) }), {
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       });
