@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import type { ParsedCard, ParsedArt, ParsedOshiSkill, ParsedQA } from "../types";
+import type { ParsedCard, ParsedArt, ParsedOshiSkill, ParsedQA, ParsedKeyword } from "../types";
 
 const BASE_URL = "https://en.hololive-official-cardgame.com";
 
@@ -176,21 +176,90 @@ function extractArts($: cheerio.CheerioAPI): ParsedArt[] {
   return arts;
 }
 
-function extractKeywords($: cheerio.CheerioAPI): { name: string; effectText: string } | null {
-  const keywordDiv = $(".cardlist-Detail div.keyword");
-  if (!keywordDiv.length) return null;
+/** Map a texticon img src/alt to a keyword type enum. */
+function keywordTypeFromImg(src: string, alt: string): string | null {
+  // Primary match: texticon filenames (e.g., collabEF.png, bloomEF.png, gift.png)
+  if (src.includes("collabEF")) return "COLLAB";
+  if (src.includes("bloomEF")) return "BLOOM";
+  if (/\/gift\./i.test(src)) return "GIFT";
 
-  const paragraphs = keywordDiv.find("p");
-  if (paragraphs.length < 2) return null;
+  // Fallback: derive from alt tag ("Collab Effect", "Bloom Effect", "Gift")
+  const altUpper = alt.toUpperCase();
+  if (altUpper.includes("COLLAB")) return "COLLAB";
+  if (altUpper.includes("BLOOM")) return "BLOOM";
+  if (altUpper.includes("GIFT")) return "GIFT";
 
-  const dataP = paragraphs.eq(1);
-  const span = dataP.find("> span").first();
-  const name = sanitize(span.text()).replace(/^[^\w#]*/g, "").trim();
-  const fullText = sanitize(dataP.text());
-  const spanText = sanitize(span.text());
-  const effectText = fullText.substring(fullText.indexOf(spanText) + spanText.length).trim();
+  // Unknown keyword type — capture first word of alt so new types still round-trip
+  if (alt.trim()) {
+    return alt.trim().split(/\s+/)[0].toUpperCase().replace(/[^A-Z0-9_]/g, "");
+  }
+  return null;
+}
 
-  return name ? { name, effectText } : null;
+/**
+ * Extract structured keywords (Gift, Collab Effect, Bloom Effect, ...).
+ * Each keyword lives in its own div.keyword inside .cardlist-Detail.
+ * The second <p> contains an <img> identifying the type followed by
+ * "Title\u3000 Description" text. Title and description are separated by a
+ * full-width space (U+3000) in the raw HTML.
+ */
+function extractKeywords($: cheerio.CheerioAPI): ParsedKeyword[] {
+  const keywords: ParsedKeyword[] = [];
+
+  $(".cardlist-Detail div.keyword").each((_, el) => {
+    const div = $(el);
+    const paragraphs = div.find("p");
+    if (paragraphs.length < 2) return;
+
+    const dataP = paragraphs.eq(1);
+    const img = dataP.find("img").first();
+    const src = img.attr("src") || "";
+    const alt = img.attr("alt") || "";
+    const type = keywordTypeFromImg(src, alt);
+    if (!type) return;
+
+    // We must split on the raw U+3000 before sanitize() collapses it.
+    // Walk text nodes following the img and split on the first U+3000.
+    let titleRaw = "";
+    let descriptionRaw = "";
+    let sawImg = false;
+    let inDescription = false;
+
+    dataP.contents().each((__, node) => {
+      if (node.type === "tag" && (node as { name?: string }).name === "img") {
+        sawImg = true;
+        return;
+      }
+      if (!sawImg) return;
+
+      const text =
+        node.type === "text"
+          ? (node as unknown as { data: string }).data
+          : $(node as unknown as cheerio.BasicAcceptedElems<never>).text();
+      if (!text) return;
+
+      if (inDescription) {
+        descriptionRaw += text;
+      } else {
+        const idx = text.indexOf("\u3000");
+        if (idx >= 0) {
+          titleRaw += text.substring(0, idx);
+          descriptionRaw += text.substring(idx + 1);
+          inDescription = true;
+        } else {
+          titleRaw += text;
+        }
+      }
+    });
+
+    const title = sanitize(titleRaw);
+    const description = sanitize(descriptionRaw);
+    if (!title) return;
+
+    keywords.push({ type, title, description });
+  });
+
+  return keywords;
 }
 
 function extractOshiSkills($: cheerio.CheerioAPI): ParsedOshiSkill[] {
@@ -398,22 +467,8 @@ export function parseCardDetail(
   // Arts (holomem)
   const arts = extractArts($);
 
-  // Keywords (holomem abilities that aren't arts)
-  const keyword = extractKeywords($);
-  if (keyword && arts.length > 0) {
-    // Attach keyword as effect text on the first art, or create a special art entry
-    if (!arts[0].effectText) {
-      arts[0].effectText = `${keyword.name}: ${keyword.effectText}`;
-    }
-  } else if (keyword && cardType === "holomem") {
-    arts.unshift({
-      name: keyword.name,
-      damage: null,
-      cost: null,
-      effectText: keyword.effectText,
-      damageBonuses: [],
-    });
-  }
+  // Keywords (Gift, Collab Effect, Bloom Effect, ...) — stored as structured data
+  const keywords = extractKeywords($);
 
   // If holomem has ability text but no arts captured it
   if (abilityText && cardType === "holomem" && arts.length === 0) {
@@ -451,5 +506,6 @@ export function parseCardDetail(
     oshiSkills,
     tags,
     qna,
+    keywords,
   };
 }

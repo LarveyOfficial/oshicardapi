@@ -75,6 +75,16 @@ CREATE TABLE IF NOT EXISTS card_colors (
   UNIQUE(card_id, color)
 );
 
+CREATE TABLE IF NOT EXISTS card_keywords (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  card_id     INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  type        TEXT NOT NULL,
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(card_id, sort_order)
+);
+
 CREATE TABLE IF NOT EXISTS scrape_state (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -93,3 +103,5 @@ CREATE INDEX IF NOT EXISTS idx_card_sets_card_id ON card_sets(card_id);
 CREATE INDEX IF NOT EXISTS idx_card_sets_set_name ON card_sets(set_name);
 CREATE INDEX IF NOT EXISTS idx_card_colors_card_id ON card_colors(card_id);
 CREATE INDEX IF NOT EXISTS idx_card_colors_color ON card_colors(color);
+CREATE INDEX IF NOT EXISTS idx_card_keywords_card_id ON card_keywords(card_id);
+CREATE INDEX IF NOT EXISTS idx_card_keywords_type ON card_keywords(type);
