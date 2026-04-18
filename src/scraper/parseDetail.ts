@@ -218,39 +218,39 @@ function extractKeywords($: cheerio.CheerioAPI): ParsedKeyword[] {
     const type = keywordTypeFromImg(src, alt);
     if (!type) return;
 
-    // We must split on the raw U+3000 before sanitize() collapses it.
-    // Walk text nodes following the img and split on the first U+3000.
-    let titleRaw = "";
+    // Structure: <p><span><img/>Title　</span>Description...</p>
+    // The title text lives inside the <span> alongside the img, then the
+    // description is the text after the span. We must inspect the raw text
+    // (before sanitize collapses U+3000) to cleanly split title from
+    // description.
+    const span = dataP.find("span").first();
+    const titleRawFromSpan = span.text(); // span.text() excludes the img
+    const fullParaText = dataP.text(); // everything inside the <p>
+
+    // Find where the span's text ends in the paragraph text so we can grab
+    // the description as the remainder.
+    let titleRaw = titleRawFromSpan;
     let descriptionRaw = "";
-    let sawImg = false;
-    let inDescription = false;
+    const spanIdx = span.length ? fullParaText.indexOf(titleRawFromSpan) : -1;
+    if (spanIdx >= 0) {
+      descriptionRaw = fullParaText.substring(spanIdx + titleRawFromSpan.length);
+    } else {
+      // Fallback: treat everything after the img as title+description combined
+      titleRaw = fullParaText;
+    }
 
-    dataP.contents().each((__, node) => {
-      if (node.type === "tag" && (node as { name?: string }).name === "img") {
-        sawImg = true;
-        return;
-      }
-      if (!sawImg) return;
-
-      const text =
-        node.type === "text"
-          ? (node as unknown as { data: string }).data
-          : $(node as unknown as cheerio.BasicAcceptedElems<never>).text();
-      if (!text) return;
-
-      if (inDescription) {
-        descriptionRaw += text;
-      } else {
-        const idx = text.indexOf("\u3000");
-        if (idx >= 0) {
-          titleRaw += text.substring(0, idx);
-          descriptionRaw += text.substring(idx + 1);
-          inDescription = true;
-        } else {
-          titleRaw += text;
-        }
-      }
-    });
+    // Title may contain a trailing U+3000 (full-width space) — if so, anything
+    // after it still belongs to the title region rather than the description.
+    // But in practice the U+3000 marks the title/description boundary WITHIN
+    // the span only when the description is empty.
+    const u3000 = titleRaw.indexOf("\u3000");
+    if (u3000 >= 0 && !descriptionRaw.trim()) {
+      descriptionRaw = titleRaw.substring(u3000 + 1);
+      titleRaw = titleRaw.substring(0, u3000);
+    } else if (u3000 >= 0) {
+      // Strip the trailing U+3000 from the title
+      titleRaw = titleRaw.substring(0, u3000);
+    }
 
     const title = sanitize(titleRaw);
     const description = sanitize(descriptionRaw);
