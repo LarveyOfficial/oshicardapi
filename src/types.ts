@@ -77,6 +77,22 @@ export interface ParsedCard {
   oshiSkills: ParsedOshiSkill[];
   tags: string[];
   qna: ParsedQA[];
+  keywords: ParsedKeyword[];
+}
+
+export interface ParsedKeyword {
+  type: string;
+  title: string;
+  description: string;
+}
+
+export interface KeywordRow {
+  id: number;
+  card_id: number;
+  type: string;
+  title: string;
+  description: string;
+  sort_order: number;
 }
 
 export interface DamageBonus {

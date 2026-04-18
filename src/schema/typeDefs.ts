@@ -97,6 +97,17 @@ export const typeDefs = /* GraphQL */ `
     oshiSkills: [OshiSkill!]!
     """Q&A entries from the official site"""
     qna: [QA!]!
+    """Structured keywords (Gift, Collab Effect, Bloom Effect, ...)"""
+    keywords: [Keyword!]!
+  }
+
+  type Keyword {
+    """Keyword type (GIFT, COLLAB, BLOOM, or other uppercase identifier)"""
+    type: String!
+    """Keyword title (e.g. "Bodyguard", "Not! Nin-Nin!!")"""
+    title: String!
+    """Keyword description / effect text"""
+    description: String!
   }
 
   type QA {

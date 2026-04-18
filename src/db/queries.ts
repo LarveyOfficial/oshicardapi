@@ -1,4 +1,4 @@
-import type { ParsedCard, CardRow, ArtRow, OshiSkillRow } from "../types";
+import type { ParsedCard, CardRow, ArtRow, OshiSkillRow, KeywordRow } from "../types";
 
 // --- Upsert operations (used by scraper) ---
 
@@ -89,6 +89,18 @@ export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void
     await db
       .prepare("INSERT INTO card_colors (card_id, color, sort_order) VALUES (?, ?, ?)")
       .bind(card.id, card.colors[i], i)
+      .run();
+  }
+
+  // Replace keywords
+  await db.prepare("DELETE FROM card_keywords WHERE card_id = ?").bind(card.id).run();
+  for (let i = 0; i < card.keywords.length; i++) {
+    const kw = card.keywords[i];
+    await db
+      .prepare(
+        "INSERT INTO card_keywords (card_id, type, title, description, sort_order) VALUES (?, ?, ?, ?, ?)"
+      )
+      .bind(card.id, kw.type, kw.title, kw.description, i)
       .run();
   }
 }
@@ -261,6 +273,14 @@ export async function getSetsForCard(db: D1Database, cardId: number): Promise<st
   return result.results.map((r) => r.set_name);
 }
 
+export async function getKeywordsForCard(db: D1Database, cardId: number): Promise<KeywordRow[]> {
+  const result = await db
+    .prepare("SELECT * FROM card_keywords WHERE card_id = ? ORDER BY sort_order")
+    .bind(cardId)
+    .all<KeywordRow>();
+  return result.results;
+}
+
 // --- Batch loading (avoids N+1 queries) ---
 
 const BATCH_SIZE = 80; // D1 limit is 100 bind params, leave room for other params
@@ -351,6 +371,19 @@ export async function batchGetQna(db: D1Database, cardIds: number[]): Promise<Ma
   for (const row of rows) {
     const existing = map.get(row.card_id) || [];
     existing.push({ question: row.question, answer: row.answer });
+    map.set(row.card_id, existing);
+  }
+  return map;
+}
+
+export async function batchGetKeywords(db: D1Database, cardIds: number[]): Promise<Map<number, KeywordRow[]>> {
+  const rows = await batchQuery<KeywordRow>(db, cardIds, (p) =>
+    `SELECT * FROM card_keywords WHERE card_id IN (${p}) ORDER BY card_id, sort_order`
+  );
+  const map = new Map<number, KeywordRow[]>();
+  for (const row of rows) {
+    const existing = map.get(row.card_id) || [];
+    existing.push(row);
     map.set(row.card_id, existing);
   }
   return map;

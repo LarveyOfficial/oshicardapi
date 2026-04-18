@@ -1,4 +1,4 @@
-import type { Env, CardRow, ArtRow, OshiSkillRow } from "../types";
+import type { Env, CardRow, ArtRow, OshiSkillRow, KeywordRow } from "../types";
 import {
   getCardById,
   getCardByNumber,
@@ -9,12 +9,14 @@ import {
   getQnaForCard,
   getSetsForCard,
   getColorsForCard,
+  getKeywordsForCard,
   batchGetArts,
   batchGetSkills,
   batchGetTags,
   batchGetQna,
   batchGetSets,
   batchGetColors,
+  batchGetKeywords,
   getAllSets,
   getAllTags,
   getAllMembers,
@@ -78,13 +80,14 @@ const SORT_FIELD_MAP: Record<string, string> = {
 };
 
 async function resolveCardFields(card: CardRow, db: D1Database) {
-  const [arts, oshiSkills, tags, qna, setNames, colors] = await Promise.all([
+  const [arts, oshiSkills, tags, qna, setNames, colors, keywords] = await Promise.all([
     getArtsForCard(db, card.id),
     getSkillsForCard(db, card.id),
     getTagsForCard(db, card.id),
     getQnaForCard(db, card.id),
     getSetsForCard(db, card.id),
     getColorsForCard(db, card.id),
+    getKeywordsForCard(db, card.id),
   ]);
 
   return {
@@ -125,6 +128,11 @@ async function resolveCardFields(card: CardRow, db: D1Database) {
       effectText: s.effect_text,
       skillType: s.skill_type === "sp_oshi" ? "SP_OSHI" : "OSHI",
     })),
+    keywords: keywords.map((k: KeywordRow) => ({
+      type: k.type,
+      title: k.title,
+      description: k.description,
+    })),
   };
 }
 
@@ -136,6 +144,7 @@ function mapCardRow(
   qna: { question: string; answer: string }[],
   setNames: string[],
   colors: string[],
+  keywords: KeywordRow[],
 ) {
   return {
     id: card.id,
@@ -175,18 +184,24 @@ function mapCardRow(
       effectText: s.effect_text,
       skillType: s.skill_type === "sp_oshi" ? "SP_OSHI" : "OSHI",
     })),
+    keywords: keywords.map((k: KeywordRow) => ({
+      type: k.type,
+      title: k.title,
+      description: k.description,
+    })),
   };
 }
 
 async function batchResolveCards(cards: CardRow[], db: D1Database) {
   const cardIds = cards.map((c) => c.id);
-  const [artsMap, skillsMap, tagsMap, qnaMap, setsMap, colorsMap] = await Promise.all([
+  const [artsMap, skillsMap, tagsMap, qnaMap, setsMap, colorsMap, keywordsMap] = await Promise.all([
     batchGetArts(db, cardIds),
     batchGetSkills(db, cardIds),
     batchGetTags(db, cardIds),
     batchGetQna(db, cardIds),
     batchGetSets(db, cardIds),
     batchGetColors(db, cardIds),
+    batchGetKeywords(db, cardIds),
   ]);
 
   return cards.map((card) =>
@@ -198,6 +213,7 @@ async function batchResolveCards(cards: CardRow[], db: D1Database) {
       qnaMap.get(card.id) || [],
       setsMap.get(card.id) || [],
       colorsMap.get(card.id) || [],
+      keywordsMap.get(card.id) || [],
     )
   );
 }
