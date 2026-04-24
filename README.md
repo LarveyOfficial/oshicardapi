@@ -486,7 +486,7 @@ oshicardapi/
 
 **`card_price_daily`** — Daily price snapshots, retained for 30 days. `date` is the timestamp from TCGPlayer's `last-updated.txt`.
 
-**`card_price_monthly`** — End-of-month price snapshots, retained for 12 months. `date` is stored as `YYYY-MM-01`.
+**`card_price_monthly`** — End-of-month price snapshots, retained for 12 months. `date` is the last day of that month (e.g., `2026-04-30`).
 
 **`scrape_state`** — Key/value store for scrape state. Currently stores `tcg_last_updated` to track the last TCGPlayer data version processed.
 

@@ -200,8 +200,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
 
     const dateOnly = priceDate.slice(0, 10);
     if (isLastDayOfMonth(dateOnly)) {
-      const monthDate = dateOnly.slice(0, 7) + "-01";
-      await saveMonthlyPrice(env.DB, cardId, monthDate, price);
+      await saveMonthlyPrice(env.DB, cardId, dateOnly, price);
     }
 
     await pruneOldPrices(env.DB, cardId);
