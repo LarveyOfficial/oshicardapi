@@ -1,4 +1,21 @@
 const TCG_HEADERS = { "User-Agent": "oshicardapi/1.0" };
+
+const RARITY_MAP: Record<string, string> = {
+  C:   "Common",
+  U:   "Uncommon",
+  R:   "Rare",
+  RR:  "Double Rare",
+  SR:  "Super Rare",
+  SEC: "Secret Rare",
+  OSR: "Oshi Super Rare",
+  OUR: "Oshi Ultra Rare",
+  UR:  "Ultra Rare",
+  S:   "Special",
+  OC:  "Oshi Common",
+  HR:  "Holomem Rare",
+  P:   "Promo",
+  SY:  "Special Yell",
+};
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const LAST_UPDATED_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -93,13 +110,16 @@ export async function getCardPrice(
   let productId: number | undefined;
   let foundSetId: number | undefined;
 
+  const tcgRarity = RARITY_MAP[rarity];
+
   for (const setId of setIds) {
     const products = await fetchTCGProducts(setId);
-    const cardProductId = products.find(
-      (product) =>
-        product.extendedData?.some((data) => data.name === "Number" && data.value === cardNumber) &&
-        product.name.includes(`(${rarity})`)
-    )?.productId;
+    const cardProductId = products.find((product) => {
+      const data = product.extendedData ?? [];
+      const numberMatch = data.some((d) => d.name === "Number" && d.value === cardNumber);
+      const rarityMatch = data.some((d) => d.name === "Rarity" && d.value === tcgRarity) || product.name.includes(`(${rarity})`);
+      return numberMatch && rarityMatch;
+    })?.productId;
 
     if (cardProductId) {
       productId = cardProductId;
