@@ -3,7 +3,7 @@ import { typeDefs } from "./schema/typeDefs";
 import { resolvers } from "./schema/resolvers";
 import { fetchWithDelay } from "./scraper/client";
 import { parseCardDetail } from "./scraper/parseDetail";
-import { getCardPrice } from "./scraper/pricing";
+import { getCardPrice, fetchLastUpdated } from "./scraper/pricing";
 import { upsertCard, getCardById, getSetsForCard, hasDailyPriceForDate, saveDailyPrice, saveMonthlyPrice, pruneOldPrices, updateTcgId } from "./db/queries";
 import type { Env } from "./types";
 
@@ -111,10 +111,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   // Fetch tcgcsv.com/last-updated.txt and persist it
   if (url.pathname === "/update-price-state") {
     try {
-      const res = await fetch("https://tcgcsv.com/last-updated.txt", {
-        headers: { "User-Agent": "oshicardapi/1.0" },
-      });
-      const value = (await res.text()).trim();
+      const value = await fetchLastUpdated(true);
       await env.DB.prepare("INSERT OR REPLACE INTO scrape_state (key, value) VALUES ('tcg_last_updated', ?)")
         .bind(value)
         .run();
@@ -159,8 +156,18 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
       });
     }
 
-    const today = new Date().toISOString().slice(0, 10);
-    const alreadyRecorded = await hasDailyPriceForDate(env.DB, cardId, today);
+    let priceDate: string;
+    try {
+      priceDate = await fetchLastUpdated();
+    } catch (err) {
+      log("error", "Failed to fetch TCG last-updated", { error: String(err) });
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const alreadyRecorded = await hasDailyPriceForDate(env.DB, cardId, priceDate);
     if (alreadyRecorded) {
       return new Response(JSON.stringify({ error: "Price already recorded for today" }), {
         status: 409,
@@ -189,20 +196,21 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     }
 
     await updateTcgId(env.DB, cardId, price.productId);
-    await saveDailyPrice(env.DB, cardId, today, price);
+    await saveDailyPrice(env.DB, cardId, priceDate, price);
 
-    if (isLastDayOfMonth(today)) {
-      const monthDate = today.slice(0, 7) + "-01";
+    const dateOnly = priceDate.slice(0, 10);
+    if (isLastDayOfMonth(dateOnly)) {
+      const monthDate = dateOnly.slice(0, 7) + "-01";
       await saveMonthlyPrice(env.DB, cardId, monthDate, price);
     }
 
     await pruneOldPrices(env.DB, cardId);
 
-    log("info", "Scraped price", { cardId, tcgId: price.productId, date: today });
+    log("info", "Scraped price", { cardId, tcgId: price.productId, date: priceDate });
     return new Response(
       JSON.stringify({
         tcgId: price.productId,
-        date: today,
+        date: priceDate,
         lowPrice: price.lowPrice,
         midPrice: price.midPrice,
         highPrice: price.highPrice,
