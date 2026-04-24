@@ -23,6 +23,7 @@ export interface CardRow {
   special_text: string | null;
   extra_text: string | null;
   scraped_at: string;
+  tcg_id: number | null;
 }
 
 export interface ArtRow {
@@ -111,6 +112,28 @@ export interface ParsedArt {
 export interface ParsedQA {
   question: string;
   answer: string;
+}
+
+export interface PriceDailyRow {
+  id: number;
+  card_id: number;
+  date: string;
+  low_price: number | null;
+  mid_price: number | null;
+  high_price: number | null;
+  market_price: number | null;
+  direct_low_price: number | null;
+}
+
+export interface PriceMonthlyRow {
+  id: number;
+  card_id: number;
+  date: string;
+  low_price: number | null;
+  mid_price: number | null;
+  high_price: number | null;
+  market_price: number | null;
+  direct_low_price: number | null;
 }
 
 export interface ParsedOshiSkill {

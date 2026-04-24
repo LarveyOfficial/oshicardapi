@@ -1,4 +1,4 @@
-import type { Env, CardRow, ArtRow, OshiSkillRow, KeywordRow } from "../types";
+import type { Env, CardRow, ArtRow, OshiSkillRow, KeywordRow, PriceDailyRow, PriceMonthlyRow } from "../types";
 import {
   getCardById,
   getCardByNumber,
@@ -10,6 +10,8 @@ import {
   getSetsForCard,
   getColorsForCard,
   getKeywordsForCard,
+  getDailyPricesForCard,
+  getMonthlyPricesForCard,
   batchGetArts,
   batchGetSkills,
   batchGetTags,
@@ -17,6 +19,8 @@ import {
   batchGetSets,
   batchGetColors,
   batchGetKeywords,
+  batchGetDailyPrices,
+  batchGetMonthlyPrices,
   getAllSets,
   getAllTags,
   getAllMembers,
@@ -79,8 +83,19 @@ const SORT_FIELD_MAP: Record<string, string> = {
   ID: "c.id",
 };
 
+function mapPriceRow(row: PriceDailyRow | PriceMonthlyRow) {
+  return {
+    date: row.date,
+    lowPrice: row.low_price,
+    midPrice: row.mid_price,
+    highPrice: row.high_price,
+    marketPrice: row.market_price,
+    directLowPrice: row.direct_low_price,
+  };
+}
+
 async function resolveCardFields(card: CardRow, db: D1Database) {
-  const [arts, oshiSkills, tags, qna, setNames, colors, keywords] = await Promise.all([
+  const [arts, oshiSkills, tags, qna, setNames, colors, keywords, dailyPrices, monthlyPrices] = await Promise.all([
     getArtsForCard(db, card.id),
     getSkillsForCard(db, card.id),
     getTagsForCard(db, card.id),
@@ -88,6 +103,8 @@ async function resolveCardFields(card: CardRow, db: D1Database) {
     getSetsForCard(db, card.id),
     getColorsForCard(db, card.id),
     getKeywordsForCard(db, card.id),
+    getDailyPricesForCard(db, card.id),
+    getMonthlyPricesForCard(db, card.id),
   ]);
 
   return {
@@ -112,6 +129,7 @@ async function resolveCardFields(card: CardRow, db: D1Database) {
     life: card.life,
     specialText: card.special_text,
     extraText: card.extra_text ?? null,
+    tcgId: card.tcg_id,
     tags,
     arts: arts.map((a: ArtRow) => ({
       name: a.name,
@@ -133,6 +151,10 @@ async function resolveCardFields(card: CardRow, db: D1Database) {
       title: k.title,
       description: k.description,
     })),
+    pricingData: {
+      dailyPrices: dailyPrices.map(mapPriceRow),
+      monthlyPrices: monthlyPrices.map(mapPriceRow),
+    },
   };
 }
 
@@ -145,6 +167,8 @@ function mapCardRow(
   setNames: string[],
   colors: string[],
   keywords: KeywordRow[],
+  dailyPrices: PriceDailyRow[],
+  monthlyPrices: PriceMonthlyRow[],
 ) {
   return {
     id: card.id,
@@ -168,6 +192,7 @@ function mapCardRow(
     life: card.life,
     specialText: card.special_text,
     extraText: card.extra_text ?? null,
+    tcgId: card.tcg_id,
     tags,
     arts: arts.map((a: ArtRow) => ({
       name: a.name,
@@ -189,12 +214,16 @@ function mapCardRow(
       title: k.title,
       description: k.description,
     })),
+    pricingData: {
+      dailyPrices: dailyPrices.map(mapPriceRow),
+      monthlyPrices: monthlyPrices.map(mapPriceRow),
+    },
   };
 }
 
 async function batchResolveCards(cards: CardRow[], db: D1Database) {
   const cardIds = cards.map((c) => c.id);
-  const [artsMap, skillsMap, tagsMap, qnaMap, setsMap, colorsMap, keywordsMap] = await Promise.all([
+  const [artsMap, skillsMap, tagsMap, qnaMap, setsMap, colorsMap, keywordsMap, dailyMap, monthlyMap] = await Promise.all([
     batchGetArts(db, cardIds),
     batchGetSkills(db, cardIds),
     batchGetTags(db, cardIds),
@@ -202,6 +231,8 @@ async function batchResolveCards(cards: CardRow[], db: D1Database) {
     batchGetSets(db, cardIds),
     batchGetColors(db, cardIds),
     batchGetKeywords(db, cardIds),
+    batchGetDailyPrices(db, cardIds),
+    batchGetMonthlyPrices(db, cardIds),
   ]);
 
   return cards.map((card) =>
@@ -214,6 +245,8 @@ async function batchResolveCards(cards: CardRow[], db: D1Database) {
       setsMap.get(card.id) || [],
       colorsMap.get(card.id) || [],
       keywordsMap.get(card.id) || [],
+      dailyMap.get(card.id) || [],
+      monthlyMap.get(card.id) || [],
     )
   );
 }

@@ -71,6 +71,10 @@ export const typeDefs = /* GraphQL */ `
     """URL to the card's page on the official website"""
     cardUrl: String
     tags: [String!]!
+    """TCGPlayer product ID"""
+    tcgId: Int
+    """Historical pricing data from TCGPlayer"""
+    pricingData: PricingData
 
     """HP for holomem cards"""
     hp: Int
@@ -99,6 +103,29 @@ export const typeDefs = /* GraphQL */ `
     qna: [QA!]!
     """Structured keywords (Gift, Collab Effect, Bloom Effect, ...)"""
     keywords: [Keyword!]!
+  }
+
+  type PricingData {
+    dailyPrices: [DailyPrice!]!
+    monthlyPrices: [MonthlyPrice!]!
+  }
+
+  type DailyPrice {
+    date: String!
+    lowPrice: Float
+    midPrice: Float
+    highPrice: Float
+    marketPrice: Float
+    directLowPrice: Float
+  }
+
+  type MonthlyPrice {
+    date: String!
+    lowPrice: Float
+    midPrice: Float
+    highPrice: Float
+    marketPrice: Float
+    directLowPrice: Float
   }
 
   type Keyword {
