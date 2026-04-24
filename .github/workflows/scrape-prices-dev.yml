@@ -1,0 +1,68 @@
+name: "Scrape Prices: Dev"
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Preview deployment URL (e.g. https://branch-name.oshicardapi.workers.dev)"
+        required: true
+        type: string
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scrape card prices
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+        run: |
+          LAST_UPDATED=$(curl -sf "https://tcgcsv.com/last-updated.txt" | tr -d '[:space:]')
+          STORED=$(curl -sf "$BASE_URL/price-state" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('value') or '')" 2>/dev/null)
+
+          if [ "$LAST_UPDATED" = "$STORED" ]; then
+            echo "TCGPlayer data unchanged ($LAST_UPDATED) — skipping."
+            exit 0
+          fi
+
+          echo "TCGPlayer updated: $LAST_UPDATED (was: $STORED)"
+          echo "Starting price scrape against $BASE_URL..."
+
+          ID=1
+          SAVED=0
+          SKIPPED=0
+          ERRORS=0
+
+          while true; do
+            RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/scrape-price?id=$ID")
+            STATUS=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
+            ERROR=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error',''))" 2>/dev/null)
+
+            if [ "$STATUS" = "200" ]; then
+              SAVED=$((SAVED + 1))
+              echo "  [$ID] saved"
+            elif [ "$STATUS" = "409" ]; then
+              SKIPPED=$((SKIPPED + 1))
+              echo "  [$ID] already recorded today — skipping"
+            elif [ "$STATUS" = "404" ]; then
+              if [ "$ERROR" = "Card not found" ]; then
+                echo "  [$ID] card not in DB — done!"
+                break
+            else
+                SKIPPED=$((SKIPPED + 1))
+                echo "  [$ID] not on TCGPlayer — skipping"
+              fi
+            else
+              ERRORS=$((ERRORS + 1))
+              echo "  [$ID] unexpected status $STATUS — skipping"
+            fi
+
+            ID=$((ID + 1))
+          done
+
+          curl -sf "$BASE_URL/update-price-state" > /dev/null
+          echo ""
+          echo "Price scrape complete! saved=$SAVED skipped=$SKIPPED errors=$ERRORS"

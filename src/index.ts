@@ -98,6 +98,39 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     }
   }
 
+  // Read stored TCG last-updated value
+  if (url.pathname === "/price-state") {
+    const row = await env.DB.prepare("SELECT value FROM scrape_state WHERE key = 'tcg_last_updated'")
+      .first<{ value: string }>();
+    return new Response(
+      JSON.stringify({ value: row?.value ?? null }),
+      { headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // Fetch tcgcsv.com/last-updated.txt and persist it
+  if (url.pathname === "/update-price-state") {
+    try {
+      const res = await fetch("https://tcgcsv.com/last-updated.txt", {
+        headers: { "User-Agent": "oshicardapi/1.0" },
+      });
+      const value = (await res.text()).trim();
+      await env.DB.prepare("INSERT OR REPLACE INTO scrape_state (key, value) VALUES ('tcg_last_updated', ?)")
+        .bind(value)
+        .run();
+      return new Response(
+        JSON.stringify({ ok: true, value }),
+        { headers: { "Content-Type": "application/json" } }
+      );
+    } catch (err) {
+      log("error", "Failed to update price state", { error: String(err) });
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
   // Scrape status
   if (url.pathname === "/scrape-status") {
     const count = await env.DB.prepare("SELECT COUNT(*) as count FROM cards")
