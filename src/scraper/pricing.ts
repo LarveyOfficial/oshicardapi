@@ -14,6 +14,7 @@ const RARITY_MAP: Record<string, string> = {
   OC:  "Oshi Common",
   HR:  "Holomem Rare",
   P:   "Promo",
+  SY:  "Special Yell",
 };
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const LAST_UPDATED_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -116,9 +117,7 @@ export async function getCardPrice(
     const cardProductId = products.find((product) => {
       const data = product.extendedData ?? [];
       const numberMatch = data.some((d) => d.name === "Number" && d.value === cardNumber);
-      const rarityMatch = tcgRarity
-        ? data.some((d) => d.name === "Rarity" && d.value === tcgRarity)
-        : product.name.includes(`(${rarity})`);
+      const rarityMatch = data.some((d) => d.name === "Rarity" && d.value === tcgRarity) || product.name.includes(`(${rarity})`);
       return numberMatch && rarityMatch;
     })?.productId;
 
