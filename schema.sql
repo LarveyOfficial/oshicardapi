@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS cards (
   is_limited    INTEGER NOT NULL DEFAULT 0,
   special_text  TEXT,
   extra_text    TEXT,
-  scraped_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  scraped_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  tcg_id        INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS card_arts (
@@ -85,6 +86,30 @@ CREATE TABLE IF NOT EXISTS card_keywords (
   UNIQUE(card_id, sort_order)
 );
 
+CREATE TABLE IF NOT EXISTS card_price_daily (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  card_id          INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  date             TEXT NOT NULL,
+  low_price        REAL,
+  mid_price        REAL,
+  high_price       REAL,
+  market_price     REAL,
+  direct_low_price REAL,
+  UNIQUE(card_id, date)
+);
+
+CREATE TABLE IF NOT EXISTS card_price_monthly (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  card_id          INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+  date             TEXT NOT NULL,
+  low_price        REAL,
+  mid_price        REAL,
+  high_price       REAL,
+  market_price     REAL,
+  direct_low_price REAL,
+  UNIQUE(card_id, date)
+);
+
 CREATE TABLE IF NOT EXISTS scrape_state (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -105,3 +130,8 @@ CREATE INDEX IF NOT EXISTS idx_card_colors_card_id ON card_colors(card_id);
 CREATE INDEX IF NOT EXISTS idx_card_colors_color ON card_colors(color);
 CREATE INDEX IF NOT EXISTS idx_card_keywords_card_id ON card_keywords(card_id);
 CREATE INDEX IF NOT EXISTS idx_card_keywords_type ON card_keywords(type);
+CREATE INDEX IF NOT EXISTS idx_card_price_daily_card_id ON card_price_daily(card_id);
+CREATE INDEX IF NOT EXISTS idx_card_price_monthly_card_id ON card_price_monthly(card_id);
+
+-- Migration: add tcg_id to existing databases (safe to run multiple times)
+ALTER TABLE cards ADD COLUMN tcg_id INTEGER;

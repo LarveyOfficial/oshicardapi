@@ -1,12 +1,13 @@
-import type { ParsedCard, CardRow, ArtRow, OshiSkillRow, KeywordRow } from "../types";
+import type { ParsedCard, CardRow, ArtRow, OshiSkillRow, KeywordRow, PriceDailyRow, PriceMonthlyRow } from "../types";
+import type { TCGPrice } from "../scraper/pricing";
 
 // --- Upsert operations (used by scraper) ---
 
 export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void> {
   await db
     .prepare(
-      `INSERT OR REPLACE INTO cards (id, card_number, name, card_type, color, rarity, set_name, release_date, illustrator, image_url, card_url, hp, bloom_level, baton_pass, life, is_buzz, support_type, is_limited, special_text, extra_text, scraped_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+      `INSERT OR REPLACE INTO cards (id, card_number, name, card_type, color, rarity, set_name, release_date, illustrator, image_url, card_url, hp, bloom_level, baton_pass, life, is_buzz, support_type, is_limited, special_text, extra_text, scraped_at, tcg_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), (SELECT tcg_id FROM cards WHERE id = ?))`
     )
     .bind(
       card.id,
@@ -28,7 +29,8 @@ export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void
       card.supportType,
       card.isLimited ? 1 : 0,
       card.specialText,
-      card.extraText
+      card.extraText,
+      card.id
     )
     .run();
 
@@ -435,4 +437,117 @@ export async function getAllTags(db: D1Database): Promise<string[]> {
     .prepare("SELECT DISTINCT tag FROM card_tags ORDER BY tag")
     .all<{ tag: string }>();
   return result.results.map((r) => r.tag);
+}
+
+// --- Pricing ---
+
+export async function updateTcgId(db: D1Database, cardId: number, tcgId: number): Promise<void> {
+  await db.prepare("UPDATE cards SET tcg_id = ? WHERE id = ?").bind(tcgId, cardId).run();
+}
+
+export async function hasDailyPriceForDate(
+  db: D1Database,
+  cardId: number,
+  date: string
+): Promise<boolean> {
+  const row = await db
+    .prepare("SELECT 1 FROM card_price_daily WHERE card_id = ? AND date = ?")
+    .bind(cardId, date)
+    .first<{ 1: number }>();
+  return row !== null;
+}
+
+export async function saveDailyPrice(
+  db: D1Database,
+  cardId: number,
+  date: string,
+  price: TCGPrice
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT OR REPLACE INTO card_price_daily (card_id, date, low_price, mid_price, high_price, market_price, direct_low_price)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+    .bind(cardId, date, price.lowPrice, price.midPrice, price.highPrice, price.marketPrice, price.directLowPrice)
+    .run();
+}
+
+export async function saveMonthlyPrice(
+  db: D1Database,
+  cardId: number,
+  date: string,
+  price: TCGPrice
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT OR REPLACE INTO card_price_monthly (card_id, date, low_price, mid_price, high_price, market_price, direct_low_price)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+    .bind(cardId, date, price.lowPrice, price.midPrice, price.highPrice, price.marketPrice, price.directLowPrice)
+    .run();
+}
+
+export async function pruneOldPrices(db: D1Database, cardId: number): Promise<void> {
+  await db
+    .prepare("DELETE FROM card_price_daily WHERE card_id = ? AND date < date('now', '-30 days')")
+    .bind(cardId)
+    .run();
+  await db
+    .prepare("DELETE FROM card_price_monthly WHERE card_id = ? AND date < date('now', '-12 months')")
+    .bind(cardId)
+    .run();
+}
+
+export async function getDailyPricesForCard(
+  db: D1Database,
+  cardId: number
+): Promise<PriceDailyRow[]> {
+  const result = await db
+    .prepare("SELECT * FROM card_price_daily WHERE card_id = ? ORDER BY date DESC LIMIT 30")
+    .bind(cardId)
+    .all<PriceDailyRow>();
+  return result.results;
+}
+
+export async function getMonthlyPricesForCard(
+  db: D1Database,
+  cardId: number
+): Promise<PriceMonthlyRow[]> {
+  const result = await db
+    .prepare("SELECT * FROM card_price_monthly WHERE card_id = ? ORDER BY date DESC LIMIT 12")
+    .bind(cardId)
+    .all<PriceMonthlyRow>();
+  return result.results;
+}
+
+export async function batchGetDailyPrices(
+  db: D1Database,
+  cardIds: number[]
+): Promise<Map<number, PriceDailyRow[]>> {
+  const rows = await batchQuery<PriceDailyRow>(db, cardIds, (p) =>
+    `SELECT * FROM card_price_daily WHERE card_id IN (${p}) ORDER BY card_id, date DESC`
+  );
+  const map = new Map<number, PriceDailyRow[]>();
+  for (const row of rows) {
+    const existing = map.get(row.card_id) || [];
+    existing.push(row);
+    map.set(row.card_id, existing);
+  }
+  return map;
+}
+
+export async function batchGetMonthlyPrices(
+  db: D1Database,
+  cardIds: number[]
+): Promise<Map<number, PriceMonthlyRow[]>> {
+  const rows = await batchQuery<PriceMonthlyRow>(db, cardIds, (p) =>
+    `SELECT * FROM card_price_monthly WHERE card_id IN (${p}) ORDER BY card_id, date DESC`
+  );
+  const map = new Map<number, PriceMonthlyRow[]>();
+  for (const row of rows) {
+    const existing = map.get(row.card_id) || [];
+    existing.push(row);
+    map.set(row.card_id, existing);
+  }
+  return map;
 }

@@ -3,7 +3,8 @@ import { typeDefs } from "./schema/typeDefs";
 import { resolvers } from "./schema/resolvers";
 import { fetchWithDelay } from "./scraper/client";
 import { parseCardDetail } from "./scraper/parseDetail";
-import { upsertCard } from "./db/queries";
+import { getCardPrice } from "./scraper/pricing";
+import { upsertCard, getCardById, getSetsForCard, hasDailyPriceForDate, saveDailyPrice, saveMonthlyPrice, pruneOldPrices, updateTcgId } from "./db/queries";
 import type { Env } from "./types";
 
 const yoga = createYoga<{ env: Env }>({
@@ -30,6 +31,13 @@ function log(level: "info" | "warn" | "error", message: string, data?: Record<st
   } else {
     console.log(JSON.stringify(entry));
   }
+}
+
+function isLastDayOfMonth(dateStr: string): boolean {
+  const d = new Date(dateStr + "T00:00:00Z");
+  const next = new Date(d);
+  next.setUTCDate(d.getUTCDate() + 1);
+  return next.getUTCMonth() !== d.getUTCMonth();
 }
 
 async function handleRequest(request: Request, env: Env): Promise<Response> {
@@ -96,6 +104,78 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
       .first<{ count: number }>();
     return new Response(
       JSON.stringify({ cardCount: count?.count ?? 0 }),
+      { headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // Scrape and store pricing data for a single card
+  if (url.pathname === "/scrape-price") {
+    const cardId = parseInt(url.searchParams.get("id") || "", 10);
+    if (isNaN(cardId)) {
+      return new Response(JSON.stringify({ error: "Missing or invalid id param" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const card = await getCardById(env.DB, cardId);
+    if (!card) {
+      return new Response(JSON.stringify({ error: "Card not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const alreadyRecorded = await hasDailyPriceForDate(env.DB, cardId, today);
+    if (alreadyRecorded) {
+      return new Response(JSON.stringify({ error: "Price already recorded for today" }), {
+        status: 409,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const setNames = await getSetsForCard(env.DB, cardId);
+
+    let price;
+    try {
+      price = await getCardPrice(card.card_number, card.rarity, setNames);
+    } catch (err) {
+      log("error", "Failed to fetch TCG price", { cardId, error: String(err) });
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (!price) {
+      return new Response(JSON.stringify({ error: "Card not found on TCGPlayer" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    await updateTcgId(env.DB, cardId, price.productId);
+    await saveDailyPrice(env.DB, cardId, today, price);
+
+    if (isLastDayOfMonth(today)) {
+      const monthDate = today.slice(0, 7) + "-01";
+      await saveMonthlyPrice(env.DB, cardId, monthDate, price);
+    }
+
+    await pruneOldPrices(env.DB, cardId);
+
+    log("info", "Scraped price", { cardId, tcgId: price.productId, date: today });
+    return new Response(
+      JSON.stringify({
+        tcgId: price.productId,
+        date: today,
+        lowPrice: price.lowPrice,
+        midPrice: price.midPrice,
+        highPrice: price.highPrice,
+        marketPrice: price.marketPrice,
+        directLowPrice: price.directLowPrice,
+      }),
       { headers: { "Content-Type": "application/json" } }
     );
   }
