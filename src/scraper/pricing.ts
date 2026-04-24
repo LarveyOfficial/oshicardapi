@@ -84,11 +84,10 @@ export async function getCardPrice(
   const setIds: number[] = [];
   for (const set of setNames) {
     const splitName = set.split(" – ");
-    if (splitName.length > 1) {
-      const setName = splitName[1].trim();
-      const boosterId = boosters.find((booster) => booster.name.includes(setName))?.groupId;
-      if (boosterId) setIds.push(boosterId);
-    }
+    const rawSetName = (splitName.length > 1 ? splitName[1] : splitName[0]).trim();
+    const setName = rawSetName === "PROMO CARDS" ? "hololive OFFICIAL CARD GAME Promos" : rawSetName;
+    const boosterId = boosters.find((booster) => booster.name.includes(setName))?.groupId;
+    if (boosterId) setIds.push(boosterId);
   }
 
   let productId: number | undefined;
