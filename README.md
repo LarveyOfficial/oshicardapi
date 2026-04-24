@@ -1,8 +1,8 @@
 # Oshi Card API
 
-A free, public GraphQL API for the **hololive Official Card Game (hOCG)**. Query every card in the game — holomem, oshi, support, and cheer cards — with full filtering, pagination, and search.
+A free, public GraphQL API for the **hololive Official Card Game (hOCG)**. Query every card in the game — holomem, oshi, support, and cheer cards — with full filtering, pagination, search, and historical TCGPlayer pricing data.
 
-Data is automatically scraped from the [official English card list](https://en.hololive-official-cardgame.com/cardlist/cardsearch/) and updated daily via GitHub Actions.
+Card data is automatically scraped from the [official English card list](https://en.hololive-official-cardgame.com/cardlist/cardsearch/) and updated daily via GitHub Actions. Pricing data is pulled from [TCGPlayer](https://www.tcgplayer.com/) via tcgcsv.com, updated daily and checked hourly for changes.
 
 ## Live API
 
@@ -20,6 +20,7 @@ Data is automatically scraped from the [official English card list](https://en.h
   - [Filtering](#filtering)
   - [Pagination](#pagination)
   - [Card Types](#card-types)
+  - [Pricing Data](#pricing-data)
   - [Enums](#enums)
 - [Example Queries](#example-queries)
 - [Architecture](#architecture)
@@ -27,6 +28,7 @@ Data is automatically scraped from the [official English card list](https://en.h
   - [Project Structure](#project-structure)
   - [Database Schema](#database-schema)
   - [Scraper](#scraper)
+  - [Price Scraper](#price-scraper)
 - [Self-Hosting](#self-hosting)
   - [Prerequisites](#prerequisites)
   - [Local Development](#local-development)
@@ -127,6 +129,8 @@ type Card {
   imageUrl: String        # URL to the card image on the official site
   cardUrl: String         # URL to the card's page on the official site
   tags: [String!]!        # Tags like #EN, #Gen 1, #Bird, #Singing
+  tcgId: Int              # TCGPlayer product ID (null if not yet fetched)
+  pricingData: PricingData  # Historical pricing from TCGPlayer
 
   # Holomem-specific
   hp: Int                 # Hit points (holomem only)
@@ -169,6 +173,37 @@ type OshiSkill {
   skillType: OshiSkillType!  # OSHI or SP_OSHI
 }
 ```
+
+### Pricing Data
+
+Each card exposes historical pricing sourced from TCGPlayer via tcgcsv.com. Prices are recorded once per TCGPlayer data update (typically daily) and retained for up to 30 days of daily history and 12 months of monthly snapshots.
+
+```graphql
+type PricingData {
+  dailyPrices: [DailyPrice!]!     # Up to 30 days of price history
+  monthlyPrices: [MonthlyPrice!]! # Up to 12 months of price history (end-of-month snapshots)
+}
+
+type DailyPrice {
+  date: String!           # Timestamp from TCGPlayer's last-updated feed
+  lowPrice: Float         # Lowest listed price
+  midPrice: Float         # Mid-market price
+  highPrice: Float        # Highest listed price
+  marketPrice: Float      # Actual average sale price
+  directLowPrice: Float   # Lowest TCGPlayer Direct price
+}
+
+type MonthlyPrice {
+  date: String!           # First day of the month (YYYY-MM-01)
+  lowPrice: Float
+  midPrice: Float
+  highPrice: Float
+  marketPrice: Float
+  directLowPrice: Float
+}
+```
+
+All price fields are `null` if TCGPlayer has no price data for that card (e.g., newly released or unlisted cards). `tcgId` will be `null` if the card's pricing has never been fetched.
 
 ### Enums
 
@@ -254,7 +289,7 @@ enum OshiSkillType {
     illustrator
     imageUrl
     cardUrl
-    setName
+    setNames
     releaseDate
     batonPass
     extraText
@@ -269,6 +304,29 @@ enum OshiSkillType {
       usageLimit
       effectText
       skillType
+    }
+  }
+}
+```
+
+### Get pricing history for a card
+
+```graphql
+{
+  card(cardNumber: "hBP01-020") {
+    name
+    tcgId
+    pricingData {
+      dailyPrices {
+        date
+        marketPrice
+        lowPrice
+        highPrice
+      }
+      monthlyPrices {
+        date
+        marketPrice
+      }
     }
   }
 }
@@ -364,7 +422,7 @@ Useful for building filter UIs.
 | Database | Cloudflare D1 (SQLite) | Free tier (5M reads/day, 5GB), co-located with Worker |
 | GraphQL | graphql-yoga | Lightweight, Workers-compatible, built-in GraphiQL |
 | Scraper | cheerio | Fast HTML parsing without a browser, works in Workers |
-| Automation | GitHub Actions | Daily cron to scrape all cards (free for public repos) |
+| Automation | GitHub Actions | Daily card scrape + hourly price scrape (free for public repos) |
 | Deploy | Wrangler CLI | Official Cloudflare tooling |
 
 ### Project Structure
@@ -372,10 +430,13 @@ Useful for building filter UIs.
 ```
 oshicardapi/
   wrangler.toml              # Cloudflare Workers config + D1 binding
-  schema.sql                 # Database schema (5 tables)
+  schema.sql                 # Database schema
   scrape-all.sh              # Local scrape script
   .github/workflows/
-    scrape.yml               # Daily GitHub Actions cron (3 AM UTC)
+    scrape-prod.yml          # Daily card scrape cron (3 AM UTC)
+    scrape-dev.yml           # Manual card scrape for preview deployments
+    scrape-prices-prod.yml   # Hourly price scrape cron
+    scrape-prices-dev.yml    # Manual price scrape for preview deployments
   src/
     index.ts                 # Worker entry point (routes + endpoints)
     types.ts                 # TypeScript interfaces
@@ -388,12 +449,13 @@ oshicardapi/
       index.ts               # getPageIds, scrapePage helpers
       parseList.ts           # Card ID extractor from search pages
       parseDetail.ts         # Card detail HTML -> ParsedCard
-      client.ts              # HTTP fetch with 500ms delay + retry
+      client.ts              # HTTP fetch with delay + retry
+      pricing.ts             # TCGPlayer price fetching (with in-memory cache)
 ```
 
 ### Database Schema
 
-**`cards`** — One row per card (unique on `card_number` + `rarity`).
+**`cards`** — One row per card.
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -412,8 +474,9 @@ oshicardapi/
 | `is_limited` | INTEGER | 1 if LIMITED |
 | `extra_text` | TEXT | Extra card text |
 | `special_text` | TEXT | Ability/rules text |
+| `tcg_id` | INTEGER | TCGPlayer product ID |
 
-**`card_arts`** — Holomem moves. `cost` is a JSON array of colors (e.g., `["RED","COLORLESS","COLORLESS"]`).
+**`card_arts`** — Holomem moves. `cost` is a JSON array of colors.
 
 **`card_oshi_skills`** — Oshi skills (regular + SP).
 
@@ -421,20 +484,33 @@ oshicardapi/
 
 **`card_tags`** — Card hashtags (e.g., `#EN`, `#Gen 1`).
 
+**`card_price_daily`** — Daily price snapshots, retained for 30 days. `date` is the timestamp from TCGPlayer's `last-updated.txt`.
+
+**`card_price_monthly`** — End-of-month price snapshots, retained for 12 months. `date` is stored as `YYYY-MM-01`.
+
+**`scrape_state`** — Key/value store for scrape state. Currently stores `tcg_last_updated` to track the last TCGPlayer data version processed.
+
 ### Scraper
 
-The scraper uses two lightweight endpoints:
+The card scraper uses two endpoints:
 
 1. **`/scrape-page-ids?page=N`** — Fetches a search result page and returns an array of card IDs
 2. **`/scrape-one?id=N`** — Fetches a single card detail page, parses it with cheerio, and upserts into D1
 
-A GitHub Actions cron job runs daily at 3 AM UTC, calling these endpoints sequentially:
-- Fetches page IDs starting from page 0
-- For each ID, calls `/scrape-one` with a 500ms delay between cards
-- 5 second pause between pages to avoid rate limiting
-- Stops when a page returns an empty array
+A GitHub Actions cron job runs daily at 3 AM UTC, paging through all IDs and calling `/scrape-one` for each with a delay between requests.
 
-The same flow can be run locally via `./scrape-all.sh`.
+### Price Scraper
+
+Pricing data is sourced from [tcgcsv.com](https://tcgcsv.com), which mirrors TCGPlayer data. The price scraper runs hourly via GitHub Actions but only fetches prices when TCGPlayer has published new data (detected via `last-updated.txt`).
+
+**Flow:**
+1. GitHub Action fetches `https://tcgcsv.com/last-updated.txt` and compares it to the stored value in `/price-state`
+2. If unchanged, the run exits immediately
+3. If changed, the action calls `/scrape-price?id=N` starting from ID 1, incrementing until a card is not found in the database
+4. Each `/scrape-price` call fetches the current price from TCGPlayer and stores a daily record. If it's the last day of the month, a monthly snapshot is also saved. Entries older than 30 days (daily) or 12 months (monthly) are pruned automatically
+5. After all cards are processed, `/update-price-state` is called to record the new `last-updated.txt` value
+
+**Caching:** TCGPlayer group, product, and price data are cached in-memory for 1 hour per Worker instance. `last-updated.txt` is cached for 30 minutes. This reduces a 1,400-card run from ~5,600 requests to roughly `(num_sets × 2) + 2` requests.
 
 ---
 
@@ -469,10 +545,12 @@ npm run deploy
 ### Populating the Database
 
 ```bash
-# Run the scrape script locally
+# Scrape all cards
 ./scrape-all.sh
 
-# Or trigger the GitHub Action manually from the Actions tab
+# Initialize price state and trigger a price scrape
+curl https://your-worker.workers.dev/update-price-state
+# Then trigger the scrape-prices-dev GitHub Action with your preview URL
 ```
 
 ---
@@ -487,6 +565,9 @@ npm run deploy
 | `/scrape-page-ids?page=N` | GET | Get card IDs from search page N |
 | `/scrape-one?id=N` | GET | Scrape and save a single card |
 | `/scrape-status` | GET | Returns current card count |
+| `/scrape-price?id=N` | GET | Fetch and store current TCGPlayer price for a card. Returns 409 if already recorded for the current TCGPlayer update, 404 if card not in DB or not on TCGPlayer |
+| `/price-state` | GET | Returns the last recorded TCGPlayer `last-updated.txt` value |
+| `/update-price-state` | GET | Fetches `last-updated.txt` from TCGPlayer and persists it to the database |
 
 ---
 
