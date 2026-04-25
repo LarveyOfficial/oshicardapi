@@ -6,8 +6,29 @@ import type { TCGPrice } from "../scraper/pricing";
 export async function upsertCard(db: D1Database, card: ParsedCard): Promise<void> {
   await db
     .prepare(
-      `INSERT OR REPLACE INTO cards (id, card_number, name, card_type, color, rarity, set_name, release_date, illustrator, image_url, card_url, hp, bloom_level, baton_pass, life, is_buzz, support_type, is_limited, special_text, extra_text, scraped_at, tcg_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), (SELECT tcg_id FROM cards WHERE id = ?))`
+      `INSERT INTO cards (id, card_number, name, card_type, color, rarity, set_name, release_date, illustrator, image_url, card_url, hp, bloom_level, baton_pass, life, is_buzz, support_type, is_limited, special_text, extra_text, scraped_at, tcg_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), (SELECT tcg_id FROM cards WHERE id = ?))
+       ON CONFLICT(id) DO UPDATE SET
+         card_number  = excluded.card_number,
+         name         = excluded.name,
+         card_type    = excluded.card_type,
+         color        = excluded.color,
+         rarity       = excluded.rarity,
+         set_name     = excluded.set_name,
+         release_date = excluded.release_date,
+         illustrator  = excluded.illustrator,
+         image_url    = excluded.image_url,
+         card_url     = excluded.card_url,
+         hp           = excluded.hp,
+         bloom_level  = excluded.bloom_level,
+         baton_pass   = excluded.baton_pass,
+         life         = excluded.life,
+         is_buzz      = excluded.is_buzz,
+         support_type = excluded.support_type,
+         is_limited   = excluded.is_limited,
+         special_text = excluded.special_text,
+         extra_text   = excluded.extra_text,
+         scraped_at   = excluded.scraped_at`
     )
     .bind(
       card.id,
