@@ -26,7 +26,7 @@
     "graphql-yoga": "^5.21.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260412.1",
+    "@cloudflare/workers-types": "^5.20260801.1",
     "typescript": "^6.0.2",
     "wrangler": "^4.118.0"
   }
