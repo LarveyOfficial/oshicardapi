@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS cards (
   color         TEXT NOT NULL,
   rarity        TEXT NOT NULL,
   set_name      TEXT,
-  release_date  TEXT,
+  release_date  TEXT,          -- ISO YYYY-MM-DD so it sorts chronologically
   illustrator   TEXT,
   image_url     TEXT,
   card_url      TEXT,
@@ -133,5 +133,11 @@ CREATE INDEX IF NOT EXISTS idx_card_keywords_type ON card_keywords(type);
 CREATE INDEX IF NOT EXISTS idx_card_price_daily_card_id ON card_price_daily(card_id);
 CREATE INDEX IF NOT EXISTS idx_card_price_monthly_card_id ON card_price_monthly(card_id);
 
+CREATE INDEX IF NOT EXISTS idx_cards_release_date ON cards(release_date);
+
+-- One-off data migrations live in migrations/ — see migrations/README.md
+
 -- Migration: add tcg_id to existing databases (safe to run multiple times)
+-- NOTE: this errors with "duplicate column name" on a database that already has
+-- the column, which aborts the rest of the file — keep it last.
 ALTER TABLE cards ADD COLUMN tcg_id INTEGER;

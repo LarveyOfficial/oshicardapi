@@ -29,6 +29,7 @@ import {
   type CardFilter,
   type CardSort,
 } from "../db/queries";
+import { formatReleaseDate, toISODate } from "../utils/releaseDate";
 
 interface Context {
   env: Env;
@@ -116,7 +117,8 @@ async function resolveCardFields(card: CardRow, db: D1Database) {
     colors,
     rarity: card.rarity,
     setNames,
-    releaseDate: card.release_date,
+    releaseDate: formatReleaseDate(card.release_date),
+    releaseDateISO: toISODate(card.release_date),
     illustrator: card.illustrator,
     imageUrl: card.image_url,
     cardUrl: card.card_url,
@@ -179,7 +181,8 @@ function mapCardRow(
     colors,
     rarity: card.rarity,
     setNames,
-    releaseDate: card.release_date,
+    releaseDate: formatReleaseDate(card.release_date),
+    releaseDateISO: toISODate(card.release_date),
     illustrator: card.illustrator,
     imageUrl: card.image_url,
     cardUrl: card.card_url,

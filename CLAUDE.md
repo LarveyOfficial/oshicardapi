@@ -71,6 +71,8 @@ Art costs and baton pass are stored as JSON arrays of color strings (e.g., `["RE
 
 Unique constraint is on `id` (INTEGER PRIMARY KEY) — the official site's card ID.
 
+`release_date` holds the **oldest** release date across every product the card appears in, stored as ISO `YYYY-MM-DD` so the `RELEASE_DATE` sort is chronological (SQLite compares TEXT lexicographically). GraphQL serves the display string as `releaseDate` and the stored value as `releaseDateISO`; conversion both ways lives in `src/utils/releaseDate.ts`.
+
 Related tables:
 - `card_arts` — holomem moves/attacks
 - `card_oshi_skills` — oshi and SP oshi skills

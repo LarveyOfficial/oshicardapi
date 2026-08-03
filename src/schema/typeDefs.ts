@@ -65,7 +65,13 @@ export const typeDefs = /* GraphQL */ `
     rarity: String!
     """Sets this card appears in"""
     setNames: [String!]!
+    """
+    Earliest release date across every product this card appears in, in the
+    official site's display format (e.g. "July 11, 2025")
+    """
     releaseDate: String
+    """Same date as releaseDate in ISO 8601 format (e.g. "2025-07-11") — sortable via RELEASE_DATE"""
+    releaseDateISO: String
     illustrator: String
     imageUrl: String
     """URL to the card's page on the official website"""

@@ -124,7 +124,8 @@ type Card {
   color: String!          # RED, GREEN, BLUE, WHITE, PURPLE, YELLOW, or NEUTRAL
   rarity: String!         # C, U, R, RR, SR, SSR, OSR, SEC, etc.
   setNames: [String!]!    # All sets this card appears in
-  releaseDate: String     # Earliest release date across all products the card appears in
+  releaseDate: String     # Earliest release date across all products the card appears in ("July 11, 2025")
+  releaseDateISO: String  # Same date in ISO 8601 ("2025-07-11") — what RELEASE_DATE sorts on
   illustrator: String     # Card illustrator name
   imageUrl: String        # URL to the card image on the official site
   cardUrl: String         # URL to the card's page on the official site
@@ -291,6 +292,7 @@ enum OshiSkillType {
     cardUrl
     setNames
     releaseDate
+    releaseDateISO
     batonPass
     extraText
     arts {
@@ -431,6 +433,7 @@ Useful for building filter UIs.
 oshicardapi/
   wrangler.toml              # Cloudflare Workers config + D1 binding
   schema.sql                 # Database schema
+  migrations/                # One-off data migrations (see migrations/README.md)
   scrape-all.sh              # Local scrape script
   .github/workflows/
     scrape-prod.yml          # Daily card scrape cron (3 AM UTC)
@@ -445,6 +448,8 @@ oshicardapi/
       resolvers.ts           # Query resolvers (D1 -> GraphQL)
     db/
       queries.ts             # SQL query builders
+    utils/
+      releaseDate.ts         # ISO <-> display-format release date helpers
     scraper/
       index.ts               # getPageIds, scrapePage helpers
       parseList.ts           # Card ID extractor from search pages
@@ -471,6 +476,7 @@ oshicardapi/
 | `life` | INTEGER | Oshi life points |
 | `is_buzz` | INTEGER | 1 if Buzz holomem |
 | `support_type` | TEXT | Item, Staff, Mascot, Fan, Event, Tool |
+| `release_date` | TEXT | Earliest release date across the card's products, ISO `YYYY-MM-DD` |
 | `is_limited` | INTEGER | 1 if LIMITED |
 | `extra_text` | TEXT | Extra card text |
 | `special_text` | TEXT | Ability/rules text |
