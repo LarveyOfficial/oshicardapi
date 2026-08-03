@@ -217,7 +217,11 @@ export async function searchCards(
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const orderBy = sort ? `${sort.field} ${sort.order}` : "c.card_number ASC";
+  // Nullable columns (release_date, hp, ...) sort last in both directions, and
+  // c.id breaks ties so paging through a coarse sort stays stable.
+  const orderBy = sort
+    ? `${sort.field} IS NULL, ${sort.field} ${sort.order}, c.id ASC`
+    : "c.card_number ASC, c.id ASC";
 
   const countResult = await db
     .prepare(`SELECT COUNT(DISTINCT c.id) as count FROM cards c ${joinTag} ${where}`)
