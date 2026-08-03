@@ -61,6 +61,66 @@ function colorsFromAlt(alt: string): string[] {
   return colors;
 }
 
+const MONTH_INDEX: Record<string, number> = {
+  january: 0,
+  february: 1,
+  march: 2,
+  april: 3,
+  may: 4,
+  june: 5,
+  july: 6,
+  august: 7,
+  september: 8,
+  october: 9,
+  november: 10,
+  december: 11,
+};
+
+/** Convert a release date string like "July 11, 2025" into a sortable timestamp */
+function releaseDateToTime(text: string): number | null {
+  const match = text.match(/([A-Za-z]+)\s+(\d{1,2}),?\s*(\d{4})/);
+  if (match) {
+    const month = MONTH_INDEX[match[1].toLowerCase()];
+    if (month !== undefined) {
+      return Date.UTC(parseInt(match[3], 10), month, parseInt(match[2], 10));
+    }
+  }
+  // Unexpected format — fall back to the built-in parser
+  const parsed = Date.parse(text);
+  return isNaN(parsed) ? null : parsed;
+}
+
+/**
+ * A card can be printed in several products (booster packs, start decks, ...),
+ * each listed with its own release date in .cardlist-Detail_Products. The card
+ * was first released with the earliest of those products, so collect every
+ * "Release Date" and keep the oldest rather than whichever happens to come
+ * first/last in the document.
+ */
+function extractReleaseDate($: cheerio.CheerioAPI): string | null {
+  const dates: string[] = [];
+  $(".cardlist-Detail_Products dl dt").each((_, dt) => {
+    if ($(dt).text().trim().toLowerCase() !== "release date") return;
+    const text = sanitize($(dt).next("dd").text());
+    if (text) dates.push(text);
+  });
+
+  if (dates.length === 0) return null;
+
+  // Default to the first listed date so unparseable formats still round-trip
+  let oldest = dates[0];
+  let oldestTime: number | null = null;
+  for (const text of dates) {
+    const time = releaseDateToTime(text);
+    if (time === null) continue;
+    if (oldestTime === null || time < oldestTime) {
+      oldest = text;
+      oldestTime = time;
+    }
+  }
+  return oldest;
+}
+
 function extractColors($: cheerio.CheerioAPI): string[] {
   const colors: string[] = [];
   $(".info img[src*='type_']").each((_, img) => {
@@ -458,8 +518,8 @@ export function parseCardDetail(
   // Ability text for holomem might be in "Ability Text" dt
   const abilityText = getDlText($, ".info", "Ability Text");
 
-  // Release date from products section
-  const releaseDate = getDlText($, ".cardlist-Detail_Products", "Release Date");
+  // Release date from products section — oldest across all listed products
+  const releaseDate = extractReleaseDate($);
 
   // Tags
   const tags = extractTags($);
