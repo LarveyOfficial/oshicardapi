@@ -124,7 +124,7 @@ type Card {
   color: String!          # RED, GREEN, BLUE, WHITE, PURPLE, YELLOW, or NEUTRAL
   rarity: String!         # C, U, R, RR, SR, SSR, OSR, SEC, etc.
   setNames: [String!]!    # All sets this card appears in
-  releaseDate: String     # Release date string
+  releaseDate: String     # Earliest release date across all products the card appears in
   illustrator: String     # Card illustrator name
   imageUrl: String        # URL to the card image on the official site
   cardUrl: String         # URL to the card's page on the official site
